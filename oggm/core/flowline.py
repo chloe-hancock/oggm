@@ -4331,6 +4331,131 @@ def run_with_hydro(gdir, settings_filesuffix='',
     fpath = gdir.get_filepath('model_diagnostics', filesuffix=suffix)
     ods.to_netcdf(fpath, mode='a')
 
+@entity_task(log)
+def run_with_runoff(gdir, *,
+                    mb_params,
+                    row_index, # Should this be altered to not be included?
+                    years=range(1979, 2019), # Observational data period for HEF, but can be changed to a different period if desired
+                    init_model_yr=1901, # Was 1979
+                    ys=1901, # Was 1979
+                    min_ys=1901, # Was 1979
+                    ref_area_yr=2004,
+                    spinup_period=21,
+                    settings_filesuffix='',
+                    csv_filepath='runoff_output.csv',
+                    run_task=None,
+                    mb_model_method=None,
+                    save_output= True):
+    """
+    Docstring for run_with_runoff
+    
+    :param mb_params: Description
+    :param row_index: Description
+    :param gdir: Description
+    :param years: Description
+    :param init_model_yr: Description
+    :param ys: Description
+    :param min_ys: Description
+    :param ref_area_yr: Description
+    :param spinup_period: Description
+    :param settings_filesuffix: Description
+    :param csv_filepath: Description
+    :param run_task: Description
+    :param save_output: Description
+    """
+    
+    # TODO: Add docstring to this function, and also check how the settings_filesuffix is being used in the rest of the code and whether we need it here, add explanations for each parameter 
+    mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
+    gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
+    
+    # Set the parameter values
+    melt_f, prcp_fac, temp_bias = mb_params
+
+    # TODO: Shouldn't need to do this with the settings_file_suffix?
+    # Can use the other style of massbalance model?
+    mb = mb_model_method(
+        gdir,
+        mb_model_class=MonthlyTIModel,
+        melt_f=float(melt_f),
+        prcp_fac=float(prcp_fac),
+        temp_bias=float(temp_bias),
+        check_calib_params=False,
+        ) 
+    
+    fls = gdir.read_pickle('inversion_flowlines') # Read flowlines
+    mbdf['mod_mb'] = mb.get_specific_mb(fls=fls, year=mbdf.index) # Compute modelled mass balance  
+
+    # Create unique file identifier based on parameters, where the model output is saved
+    file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
+    
+    # Uses run with hydro to calculate hydrological output, so we can calculate the runoff
+    run_with_hydro(
+        gdir,
+        run_task=run_task,
+        ys=ys, # The simulation start year
+        min_ys=min_ys, # For the run from climate data, to ensure we have data from 1979
+        init_model_yr=init_model_yr,
+        ref_area_yr=ref_area_yr,
+        mb_model=mb, # The modified MB model
+        store_monthly_hydro=True,
+        output_filesuffix=file_id,
+        settings_filesuffix= settings_filesuffix # TODO: Check how to use this with the rest of the code?
+    )
+
+    with xr.open_dataset(gdir.get_filepath('model_diagnostics', filesuffix=file_id)) as ds:
+        # The last step of hydrological output is NaN (we can't compute it for this year)
+        ds = ds.isel(time=slice(0, -1)).load()
+        
+    # These summed variabels give the total runoff from the glacier
+    runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
+    
+    df_area = ds['area_m2'].to_dataframe()
+    df_area.index = df_area.index.astype(float).astype(int)
+
+    df_annual = ds[runoff_vars].to_dataframe()
+    # Convert hydrology index from float-year to integer-year
+    df_annual.index = df_annual.index.astype(float).astype(int)
+
+    # Convert MB index to integer-year
+    mbdf_annual = mbdf.loc[years[0]:years[-1]].copy()
+    mbdf_annual.index = mbdf_annual.index.astype(int)
+
+    # Slice to the intended analysis window
+    y1 = years[0] + spinup_period    # e.g. 2000
+    y2 = years[-1]                   # e.g. 2018
+
+    df_annual = df_annual.loc[y1:y2]
+    mbdf_annual = mbdf_annual.loc[y1:y2]
+
+    # Convert runoff from kg → Gt-equivalent and sum components
+    df_runoff = df_annual[runoff_vars].clip(0) * 1e-9
+    runoff = df_runoff.sum(axis=1)
+
+    # Final alignment: guarantee identical year indices
+    common_years = df_annual.index.intersection(mbdf_annual.index)
+
+    df_annual = df_annual.loc[common_years]
+    mbdf_annual = mbdf_annual.loc[common_years]
+    runoff = runoff.loc[common_years]
+    df_area = df_area.loc[common_years]
+
+    # ---------------------------
+    #  Output arrays
+    # ---------------------------
+    years_out = common_years.values
+
+    # Write the output to a csv file
+    df = pd.DataFrame({
+            'years': years_out,
+            'runoff': runoff.values,
+            'mass_balance': mbdf_annual['mod_mb'].values,
+            'area': df_area['area_m2'].values})
+    
+    if save_output:
+        df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
+
+    return np.array(runoff)
+
 
 def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
     """Stop the simulation when the glacier volume is zero for a given period
