@@ -4333,46 +4333,70 @@ def run_with_hydro(gdir, settings_filesuffix='',
 
 @entity_task(log)
 def run_with_runoff(gdir, *,
-                    mb_params,
-                    row_index, # Should this be altered to not be included?
-                    years=range(1979, 2019), # Observational data period for HEF, but can be changed to a different period if desired
-                    init_model_yr=1901, # Was 1979
-                    ys=1901, # Was 1979
-                    min_ys=1901, # Was 1979
-                    ref_area_yr=2004,
-                    spinup_period=21,
+                    mb_params=None,
+                    row_index=None,
+                    years=None,
+                    init_model_yr=None,
+                    ys=None,
+                    min_ys=None,
+                    ref_area_yr=None,
+                    spinup_period=None,
                     settings_filesuffix='',
                     csv_filepath='runoff_output.csv',
                     run_task=None,
                     mb_model_method=None,
                     save_output= True):
     """
-    Docstring for run_with_runoff
+    # TODO: Update the model inputs here and add this into the notebook
+    # TODO: Remove some of the inputs and workflow? So this is more similar to the run_with_hydro task.
+    Calculates the runoff from a glacier using the `run_with_hydro` task, and saves the outputs to a CSV file.
+    This 
     
-    :param mb_params: Description
-    :param row_index: Description
-    :param gdir: Description
-    :param years: Description
-    :param init_model_yr: Description
-    :param ys: Description
-    :param min_ys: Description
-    :param ref_area_yr: Description
-    :param spinup_period: Description
-    :param settings_filesuffix: Description
-    :param csv_filepath: Description
-    :param run_task: Description
-    :param save_output: Description
+    mb_params: tuple
+        The mass balance parameters to use for the run, 
+        in the order of melt_f, prcp_fac, temp_bias
+    row_index: int
+        The index of the row in the input parameter dataframe, used to create a unique identifier for the output file. 
+        This is included to allow for parallel runs with different parameters, where each run can be identified by its row index in the input dataframe.
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    years: range or list
+        The years we will be using for analysis, which should be a subset of the years for which we run the model. 
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
+    ys : int
+        start year of the model run (needs to be set)
+    min_ys : int
+        if you want to impose a minimum start year, regardless if the glacier
+        inventory date is earlier (e.g. if climate data does not reach).
+    ref_area_yr : int
+        the hydrological output is computed over a reference area, which
+        per default is the largest area covered by the glacier in the simulation
+        period. Use this kwarg to force a specific area to the state of the
+        glacier at the provided simulation year.
+    spinup_period: int
+        The number of years to run the model in spinup mode before starting the 
+        main simulation.
+    settings_filesuffix : str
+        a filesuffix for using a specific settings file
+    csv_filepath: str
+        The path to the CSV file where the output will be saved.
+    run_task : func
+        any of the `run_*`` tasks in the oggm.flowline module.
+        The mass balance model used needs to have the `add_climate` output
+        kwarg available though.
+    save_output: bool
+        Whether to save the output to a CSV file or not. Default is True.
     """
     
-    # TODO: Add docstring to this function, and also check how the settings_filesuffix is being used in the rest of the code and whether we need it here, add explanations for each parameter 
     mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
     gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
     
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params
 
-    # TODO: Shouldn't need to do this with the settings_file_suffix?
-    # Can use the other style of massbalance model?
+    # TODO: Can use the other style of massbalance model? Perhaps change this?
     mb = mb_model_method(
         gdir,
         mb_model_class=MonthlyTIModel,
