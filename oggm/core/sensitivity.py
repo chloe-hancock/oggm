@@ -8,9 +8,6 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LinearRegression
 from oggm import cfg, workflow
 
 # Module logger
@@ -80,10 +77,13 @@ def run_with_runoff_for_sa(gdir, *,
     save_output: bool
         Whether to save the output to a CSV file or not. Default is True.
     """
-    
-    mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
+    try:
+        mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
+    except (RuntimeError):
+    # No WGMS data available — create an empty frame with the right index
+        mbdf = pd.DataFrame(index=years)
     gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
-    
+
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params
 
@@ -96,6 +96,7 @@ def run_with_runoff_for_sa(gdir, *,
         temp_bias=float(temp_bias),
         check_calib_params=False,
         ) 
+
     
     fls = gdir.read_pickle('inversion_flowlines') # Read flowlines
     mbdf['mod_mb'] = mb.get_specific_mb(fls=fls, year=mbdf.index) # Compute modelled mass balance  
@@ -120,6 +121,7 @@ def run_with_runoff_for_sa(gdir, *,
     with xr.open_dataset(gdir.get_filepath('model_diagnostics', filesuffix=file_id)) as ds:
         # The last step of hydrological output is NaN (we can't compute it for this year)
         ds = ds.isel(time=slice(0, -1)).load()
+    
 
     # These summed variabels give the total runoff from the glacier
     runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
@@ -364,8 +366,12 @@ def spinup_area_volume(gdir, *,
     save_output: bool
         Whether to save the output to a CSV file or not. Default is True.
     """
-    
-    mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
+    try:
+        mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
+    except (RuntimeError):
+    # No WGMS data available — create an empty frame with the right index
+        mbdf = pd.DataFrame(index=years)
+
     gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
     
     # Set the parameter values
