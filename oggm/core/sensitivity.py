@@ -9,6 +9,7 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 from oggm import cfg, workflow
+import matplotlib.pyplot as plt
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ def run_with_runoff_for_sa(gdir, *,
     try:
         mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
     except (RuntimeError):
-    # No WGMS data available — create an empty frame with the right index
+    # If no WGMS data available create an empty frame with the right index
         mbdf = pd.DataFrame(index=years)
     gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
 
@@ -129,8 +130,8 @@ def run_with_runoff_for_sa(gdir, *,
     # Model output years
     hydro_years = ds['time'].values
 
-    y1 = int(max(hydro_years.min(), years[0] + spinup_period))
-    y2 = int(min(hydro_years.max(), years[-1]))
+    y1 = years[0] + spinup_period
+    y2 = years[-1]
 
     if y1 > y2:
         log.warning(f"No valid hydrological years for parameters {mb_params}")
@@ -464,3 +465,105 @@ def runoff_execution_full_spinup(fun_test, X, gdir,
     cfg.PARAMS["continue_on_error"] = old_continue_one_error
 
     return out_list
+
+def colour_plotting_timeseries(j, 
+             plot_area_flag=True, 
+             plot_spec_mb_flag=False, 
+             plot_runoff= True, 
+             plot_mass_balance=False,
+             years_dict= None,
+             rgi_dates = None,
+             area_dict = None,
+             rgi_area_km2s = None,
+             mass_balance_dict = None,
+             hugonnet_dmdtda = None,
+             N = None,
+             runoff_dict = None):
+    
+    if (plot_area_flag is False) and (plot_spec_mb_flag is False):
+        raise ValueError("One of the success index flags must be set to True!")
+    
+    if (plot_area_flag is False) and (plot_spec_mb_flag is False):
+        raise ValueError("One of the plotting flags must be set to True!")
+    
+    if (plot_area_flag is True) and (plot_spec_mb_flag is True):
+        raise ValueError("Only one of the success index flags must be set to True!")
+    
+    if (plot_area_flag is True) and (plot_spec_mb_flag is True):
+        raise ValueError("Only one of the plotting flags must be set to True!")
+
+    ##############################################################################################
+    # The success measure index is now set to the Area Bias at the Observation Year
+    ##############################################################################################
+
+    if plot_area_flag == True:
+        index = np.where(years_dict[j][0] == rgi_dates[j])[0][0]
+
+        new_area_in_rgi_year = []
+        for new_area_sample in area_dict[j]:
+            new_area_in_rgi_year.append(new_area_sample[index])
+
+        success_measure_index = []
+
+        for i in range(len(new_area_in_rgi_year)):
+            success_measure_index.append((new_area_in_rgi_year[i] - rgi_area_km2s[j]))
+
+    ##############################################################################################
+    # The success measure index is now set to the Specific Mass Balance in the Observation Period
+    ##############################################################################################
+
+    if plot_spec_mb_flag == True:
+
+        years = np.array(years_dict[j][0])
+        idx = np.where((years >= 2000) & (years <= 2020))[0]
+
+        # mass balance ensemble is a list of arrays
+        mb_list = mass_balance_dict[j]          # length ≈ 1000
+        mb_means = []
+
+        for sample in mb_list:
+            sample = np.array(sample)           # shape (30,)
+            sliced = sample[idx]                # slice 2000–2019
+            mb_means.append(sliced.mean())      # take mean
+        
+        success_measure_index = []
+
+        for i in range(len(mb_means)):
+            success_measure_index.append(abs(hugonnet_dmdtda[j] - mb_means[i]))
+
+    # compile csvs to plot timeseries and plot to view the mass balance time series for each of the 50 samples, to see how they are looking and check that they make sense before we calculate the sensitivity indices
+    # Colormap and normalization
+    cmap = plt.cm.coolwarm
+
+    vmin = min(success_measure_index)
+    vmax = max(success_measure_index)
+    norm_success_measure_index = plt.Normalize(vmin=vmin, vmax=vmax)
+
+    plt.figure(figsize=(15,5))
+    fig, ax = plt.subplots(figsize=(15, 5))
+
+    for i in range(N):
+        color = cmap(norm_success_measure_index(success_measure_index[i]))
+        if plot_runoff is True:
+            plt.plot(years_dict[j][i], runoff_dict[j][i], label='sim', color=color, linewidth=0.5)
+            plt.title('Runoff time series for each parameter sample, N = %d' % N)
+        if plot_mass_balance is True:
+            plt.plot(years_dict[j][i], mass_balance_dict[j][i], label='sim', color=color, linewidth=0.5)
+            plt.title('Mass Balance time series for each parameter sample, N = %d' % N)
+
+    # Add colorbar linked to the same colormap
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm_success_measure_index)
+    sm.set_array([])  # required for colorbar
+    cbar = fig.colorbar(sm, ax=ax)
+
+    if plot_area_flag == True:
+        cbar.set_label('Area Bias at RGI Year')
+    elif plot_spec_mb_flag == True:
+        cbar.set_label('Specific Mass Balance Bias at Hugonnet Region')
+
+    plt.xlabel('Years')
+    if plot_runoff is True:
+        plt.ylabel('Runoff')
+    if plot_mass_balance is True:
+        plt.ylabel("Mass Balance")
+    plt.show()
