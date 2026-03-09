@@ -127,9 +127,6 @@ def run_with_runoff_for_sa(gdir, *,
     # These summed variabels give the total runoff from the glacier
     runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
 
-    # Model output years
-    hydro_years = ds['time'].values
-
     y1 = years[0] + spinup_period
     y2 = years[-1]
 
@@ -370,7 +367,7 @@ def spinup_area_volume(gdir, *,
     try:
         mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
     except (RuntimeError):
-    # No WGMS data available — create an empty frame with the right index
+    # If no WGMS data available create an empty frame with the right index
         mbdf = pd.DataFrame(index=years)
 
     gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
@@ -518,16 +515,15 @@ def colour_plotting_timeseries(j,
         idx = np.where((years >= 2000) & (years <= 2020))[0]
 
         # mass balance ensemble is a list of arrays
-        mb_list = mass_balance_dict[j]          # length ≈ 1000
+        mb_list = mass_balance_dict[j]
         mb_means = []
 
         for sample in mb_list:
-            sample = np.array(sample)           # shape (30,)
-            sliced = sample[idx]                # slice 2000–2019
-            mb_means.append(sliced.mean())      # take mean
+            sample = np.array(sample)
+            sliced = sample[idx] # slice 2000–2019
+            mb_means.append(sliced.mean())
         
         success_measure_index = []
-
         for i in range(len(mb_means)):
             success_measure_index.append(abs(hugonnet_dmdtda[j] - mb_means[i]))
 
