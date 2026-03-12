@@ -172,12 +172,13 @@ def run_with_runoff_for_sa(gdir, *,
 def parameter_bounding(
     X,
     y_area,
-    y_hugonnet,
-    percentile=10,
+    y_mass_balance,
+    hugonnet,
+    hugonnet_error,
+    obs_area,
+    area_percentile=10,
     area_bounding_flag=True,
-    hugonnet_bounding_flag=False,
-    lower_error=None,
-    upper_error=None
+    hugonnet_bounding_flag=True
 ):
     """
     Selects parameter sets based on:
@@ -185,9 +186,12 @@ def parameter_bounding(
     - Hugonnet mass-balance uncertainty bounds (y_hugonnet within upper/lower error)
     """
 
-    # 0. Check flags 
+    # Check flags 
     if not area_bounding_flag and not hugonnet_bounding_flag:
         raise ValueError("At least one bounding method must be chosen!")
+    
+    lower_error = hugonnet - hugonnet_error
+    upper_error = hugonnet + hugonnet_error
 
     if hugonnet_bounding_flag:
         if lower_error is None or upper_error is None:
@@ -195,35 +199,46 @@ def parameter_bounding(
         if lower_error >= upper_error:
             raise ValueError("lower_error must be < upper_error.")
 
-    # 1. Prepare arrays 
+    # Prepare arrays 
     y_area = np.asarray(y_area).ravel()
-    y_hugonnet = np.asarray(y_hugonnet).ravel()
+    y_mass_balance = np.asarray(y_mass_balance).ravel()
 
     # 2. Area bias threshold 
-    abs_y_area = np.abs(y_area)
-    thr = np.percentile(abs_y_area, percentile)
+    area_lower_bound = obs_area * (1 - area_percentile/100)
+    area_upper_bound = obs_area * (1 + area_percentile/100)
 
-    # 3. Build mask 
+    # Build mask 
     # Start with everything selected
     mask = np.ones(len(y_area), dtype=bool)
 
     if area_bounding_flag:
-        mask &= (abs_y_area <= thr)
+        mask &= (y_area <= area_upper_bound) & (y_area >= area_lower_bound)
+        kept = mask.sum()
+        pct  = (kept / len(y_area)) * 100
+        print(f"After area bounding: {kept}/{len(y_area)} values remain ({pct:.1f}%)")
 
     if hugonnet_bounding_flag:
-        mask &= (y_hugonnet >= lower_error) & (y_hugonnet <= upper_error)
+        before = mask.sum()  # how many were left before this step
+        mask &= (y_mass_balance >= lower_error) & (y_mass_balance <= upper_error)
+        kept = mask.sum()
+        pct  = (kept / len(y_area)) * 100
+        step_pct = (kept / before) * 100 if before > 0 else 0
+        print(f"After Hugonnet bounding: {kept}/{len(y_area)} values remain "
+              f"({pct:.1f}% of original; {step_pct:.1f}% kept from previous step)")
 
-    # ---- 4. Apply mask ----
+    # 4. Apply mask 
     if mask.sum() == 0:
         raise ValueError("No samples satisfy the selected bounds. "
                          "Try relaxing percentile or Hugonnet range.")
 
     good_X = X[mask]
 
+    print("There are " + str(len(good_X)) + " samples captured within the given bounds.")
+
     lb = good_X.min(axis=0)
     ub = good_X.max(axis=0)
 
-    return lb, ub
+    return lb, ub, good_X
 
 #######################################################################
 # Metric calculator for hydro outputs - for Sensitivity Analysis
@@ -474,6 +489,7 @@ def colour_plotting_timeseries(j,
              rgi_area_km2s = None,
              mass_balance_dict = None,
              hugonnet_dmdtda = None,
+             hugonnet_dmdtda_err = None,
              N = None,
              runoff_dict = None):
     
@@ -545,6 +561,11 @@ def colour_plotting_timeseries(j,
             plt.title('Runoff time series for each parameter sample, N = %d' % N)
         if plot_mass_balance is True:
             plt.plot(years_dict[j][i], mass_balance_dict[j][i], label='sim', color=color, linewidth=0.5)
+            
+            plt.axhline(hugonnet_dmdtda)
+            plt.axhline(hugonnet_dmdtda + hugonnet_dmdtda_err, linestyle = '--', color='teal', alpha = 0.25)
+            plt.axhline(hugonnet_dmdtda - hugonnet_dmdtda_err, linestyle = '--', color='teal')
+            plt.axhspan(hugonnet_dmdtda - hugonnet_dmdtda_err, hugonnet_dmdtda + hugonnet_dmdtda_err, color='teal', alpha = 0.25, label = 'Hugonnet Observation and Error')
             plt.title('Mass Balance time series for each parameter sample, N = %d' % N)
 
     # Add colorbar linked to the same colormap
