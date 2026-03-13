@@ -302,7 +302,7 @@ def runoff_execution(fun_test, X, gdir,
         kw.update(
             mb_params=sample_row,
             row_index=i,
-            settings_filesuffix=f"_exp{i}"   # <- writing a new settings_filesuffix with each sample
+            settings_filesuffix=f"_exp{i}" # <- writing a new settings_filesuffix with each sample
         )
         all_experiments.append((gdir, kw))
     
@@ -541,7 +541,7 @@ def colour_plotting_timeseries(j,
         
         success_measure_index = []
         for i in range(len(mb_means)):
-            success_measure_index.append(abs(hugonnet_dmdtda[j] - mb_means[i]))
+            success_measure_index.append(mb_means[i])
 
     # compile csvs to plot timeseries and plot to view the mass balance time series for each of the 50 samples, to see how they are looking and check that they make sense before we calculate the sensitivity indices
     # Colormap and normalization
@@ -557,16 +557,18 @@ def colour_plotting_timeseries(j,
     for i in range(N):
         color = cmap(norm_success_measure_index(success_measure_index[i]))
         if plot_runoff is True:
-            plt.plot(years_dict[j][i], runoff_dict[j][i], label='sim', color=color, linewidth=0.5)
+            plt.plot(years_dict[j][i], runoff_dict[j][i], color=color, linewidth=0.5)
             plt.title('Runoff time series for each parameter sample, N = %d' % N)
         if plot_mass_balance is True:
-            plt.plot(years_dict[j][i], mass_balance_dict[j][i], label='sim', color=color, linewidth=0.5)
+            plt.plot(years_dict[j][i], mass_balance_dict[j][i], color=color, linewidth=0.5)
             
-            plt.axhline(hugonnet_dmdtda)
-            plt.axhline(hugonnet_dmdtda + hugonnet_dmdtda_err, linestyle = '--', color='teal', alpha = 0.25)
-            plt.axhline(hugonnet_dmdtda - hugonnet_dmdtda_err, linestyle = '--', color='teal')
-            plt.axhspan(hugonnet_dmdtda - hugonnet_dmdtda_err, hugonnet_dmdtda + hugonnet_dmdtda_err, color='teal', alpha = 0.25, label = 'Hugonnet Observation and Error')
-            plt.title('Mass Balance time series for each parameter sample, N = %d' % N)
+    if plot_mass_balance is True:
+        plt.axhline(hugonnet_dmdtda[j], color='teal')
+        plt.axhline(hugonnet_dmdtda[j] + hugonnet_dmdtda_err[j], linestyle = '--', color='teal')
+        plt.axhline(hugonnet_dmdtda[j] - hugonnet_dmdtda_err[j], linestyle = '--', color='teal')
+        plt.axhspan(hugonnet_dmdtda[j] - hugonnet_dmdtda_err[j], hugonnet_dmdtda[j] + hugonnet_dmdtda_err[j], color='teal', alpha = 0.25, label = 'Hugonnet Observation and Error', zorder=3)
+        plt.legend()
+        plt.title('Mass Balance time series for each parameter sample, N = %d' % N)
 
     # Add colorbar linked to the same colormap
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm_success_measure_index)
@@ -576,7 +578,7 @@ def colour_plotting_timeseries(j,
     if plot_area_flag == True:
         cbar.set_label('Area Bias at RGI Year')
     elif plot_spec_mb_flag == True:
-        cbar.set_label('Specific Mass Balance Bias at Hugonnet Region')
+        cbar.set_label('Specific Mass Balance in 2000-2020')
 
     plt.xlabel('Years')
     if plot_runoff is True:
