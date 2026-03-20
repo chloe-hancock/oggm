@@ -176,13 +176,14 @@ def parameter_bounding(
     hugonnet,
     hugonnet_error,
     obs_area,
+    year_idx,
     area_percentile=10,
     area_bounding_flag=True,
     hugonnet_bounding_flag=True
 ):
     """
     Selects parameter sets based on:
-    - area bias percentile (y_area close to 0)
+    - Deviation from area (y_area close to 0)
     - Hugonnet mass-balance uncertainty bounds (y_hugonnet within upper/lower error)
     """
 
@@ -198,10 +199,20 @@ def parameter_bounding(
             raise ValueError("lower_error and upper_error must be provided for Hugonnet bounding.")
         if lower_error >= upper_error:
             raise ValueError("lower_error must be < upper_error.")
-
+        
     # Prepare arrays 
-    y_area = np.asarray(y_area).ravel()
-    y_mass_balance = np.asarray(y_mass_balance).ravel()
+    y_area = np.asarray(y_area)
+    y_mass_balance = np.asarray(y_mass_balance)
+
+    # Areas at the RGI year, before and after
+    area_at_rgi_yr = []
+    area_before_rgi_yr = []
+    area_after_rgi_yr = []
+
+    for i in range(len(X)):
+        area_at_rgi_yr.append(y_area[i][year_idx]) # year at RGI Observation
+        area_before_rgi_yr.append(y_area[i][year_idx-1]) # year before RGI Observation
+        area_after_rgi_yr.append(y_area[i][year_idx+1]) # year after RGI Observation
 
     # 2. Area bias threshold 
     area_lower_bound = obs_area * (1 - area_percentile/100)
@@ -211,8 +222,18 @@ def parameter_bounding(
     # Start with everything selected
     mask = np.ones(len(y_area), dtype=bool)
 
+    area_at_rgi_yr = np.array(area_at_rgi_yr)
+    area_before_rgi_yr = np.array(area_before_rgi_yr)
+    area_after_rgi_yr = np.array(area_after_rgi_yr)
+
     if area_bounding_flag:
-        mask &= (y_area <= area_upper_bound) & (y_area >= area_lower_bound)
+        cond_at = (area_at_rgi_yr <= area_upper_bound) & (area_at_rgi_yr >= area_lower_bound)
+        cond_before = (area_before_rgi_yr <= area_upper_bound) & (area_before_rgi_yr >= area_lower_bound)
+        cond_after = (area_after_rgi_yr <= area_upper_bound) & (area_after_rgi_yr >= area_lower_bound)
+        
+        ok_area = (cond_at | cond_before | cond_after)
+        mask &= ok_area
+
         kept = mask.sum()
         pct  = (kept / len(y_area)) * 100
         print(f"After area bounding: {kept}/{len(y_area)} values remain ({pct:.1f}%)")
