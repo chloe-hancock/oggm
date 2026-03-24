@@ -1,5 +1,5 @@
 from oggm import entity_task
-import logging 
+import logging
 import numpy as np
 from oggm.core.flowline import run_with_hydro
 from oggm.core.massbalance import MonthlyTIModel
@@ -12,7 +12,7 @@ from oggm import cfg, workflow
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import time
-
+import sys
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -79,6 +79,18 @@ def run_with_runoff_for_sa(gdir, *,
         any of the `run_*`` tasks in the oggm.flowline module.
         The mass balance model used needs to have the `add_climate` output
         kwarg available though.
+INFO:    gocryptfs not found, will not be able to use gocryptfs
+/   0.0 B Elapsed Time: 0:00:00
+|  -1.0 B Elapsed Time: 0:00:00
+  0% of 679.1 MiB |                      | Elapsed Time: 0:00:00 ETA:  --:--:--
+100% of 679.1 MiB |######################| Elapsed Time: 0:00:03 Time:  0:00:03
+  0% of  38.4 MiB |                      | Elapsed Time: 0:00:00 ETA:  --:--:--
+100% of  38.4 MiB |######################| Elapsed Time: 0:00:00 Time:  0:00:00
+^MProcessing samples:   0%|          | 0/100 [00:00<?, ?sample/s]^MProcessing samples:   1%|          | 1/100 [00:04<07:14,  4.39s/sample]^MProcessing samples:   1%|          | 1/100 [00:04<07:14,  4.39s/sample]^MProcessing samples:   2%|▏         | 2/100 [00:05<04:0>
+
+
+
+
     save_output: bool
         Whether to save the output to a CSV file or not. Default is True.
     """
@@ -311,12 +323,19 @@ def runoff_execution(fun_test, X, gdir,
     all_experiments = []
 
     # PROGRESS BAR FOR SAMPLES
-    pbar = tqdm(total=len(X), desc="Processing samples", unit="sample", dynamic_ncols=True)
+    pbar = tqdm(total=len(X), 
+		desc="Processing samples", 
+		unit="sample", 
+		dynamic_ncols=False,
+		mininterval=1,
+		ascii=True,
+		file=sys.stderr,
+		disable=False)
 
     # Callback used by each entity task
     def update_pbar():
         pbar.update(1)
-        pbar.refresh()   # fix buffering on HPC
+	tqdm.write(f"Processed {pbar.n}/{pbar.total} samples", file=sys.stderr)
 
     # Shared parameters for each sample
     common = dict(

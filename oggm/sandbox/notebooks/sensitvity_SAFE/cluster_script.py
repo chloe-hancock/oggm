@@ -77,7 +77,7 @@ def main():
 			
 	samp_strat = 'lhs'
 
-	N = 10 # Number of samples
+	N = 100 # Number of samples
 
 	X = AAT_sampling(samp_strat, M, distr_fun, distr_par, N) # Generate the samples, start all with the same initial boundaries
 
