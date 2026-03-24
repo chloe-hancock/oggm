@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import time
 import sys
+import os
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -24,29 +25,30 @@ PROGRESS_UPDATE = None
 PROGRESS_GLACIER = None
 PROGRESS_BAR = None
 
+
 def progress_callback(i):
-    """Multiprocessing-safe progress callback with PROGRESS_BAR support."""
-    global PROGRESS_BAR, PROGRESS_TOTAL, PROGRESS_START_T, PROGRESS_UPDATE, PROGRESS_GLACIER
+    """Fully spawn-safe parallel progress bar callback."""
+    global PROGRESS_TOTAL, PROGRESS_UPDATE, PROGRESS_GLACIER, PROGRESS_START_T, PROGRESS_BAR
 
-    # Lazy initialization in each process
-    if PROGRESS_UPDATE is None or PROGRESS_TOTAL is None or PROGRESS_GLACIER is None:
-        return   # globals not set yet, skip printing
-
-    if PROGRESS_BAR is None:
+    # Lazy init: workers initialize on first call
+    if PROGRESS_TOTAL is None:
+        PROGRESS_TOTAL   = int(os.environ["OGGM_CB_TOTAL"])
+        PROGRESS_UPDATE  = int(os.environ["OGGM_CB_UPDATE"])
+        PROGRESS_GLACIER = int(os.environ["OGGM_CB_GLACIER"])
+        PROGRESS_START_T = float(os.environ["OGGM_CB_START"])
         PROGRESS_BAR = tqdm(total=PROGRESS_TOTAL, disable=True)
-        PROGRESS_BAR.update(1)
+
+    PROGRESS_BAR.update(1)
 
     if (i % PROGRESS_UPDATE == 0) or (i == PROGRESS_TOTAL):
         elapsed = time.time() - PROGRESS_START_T
         bar_str = tqdm.format_meter(
-            n=i,
-            total=PROGRESS_TOTAL,
-            elapsed=elapsed,
+            n=i, total=PROGRESS_TOTAL, elapsed=elapsed,
             ncols=40,
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} samples"
         )
-        print(f"Glacier {PROGRESS_GLACIER}: {bar_str}",
-              file=sys.stderr, flush=True)
+        print(f"Glacier {PROGRESS_GLACIER}: {bar_str}", file=sys.stderr, flush=True)
+
 
 #######################################################################
 # Function for calculating the runoff outputs for Sensitivity Analysis
