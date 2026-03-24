@@ -36,7 +36,8 @@ def run_with_runoff_for_sa(gdir, *,
                     params_csv_filepath='params.csv',
                     run_task=None,
                     mb_model_method=None,
-                    save_output= True):
+                    save_output= True,
+                    progress_callback=None):
     """
     # TODO: Update the model inputs here and add this into the notebook?
     # TODO: Remove some of the inputs and workflow? So this is more similar to the run_with_hydro task.
@@ -166,6 +167,10 @@ def run_with_runoff_for_sa(gdir, *,
     if save_output:
         df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
         param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
+    
+    if progress_callback is not None:
+        progress_callback()
+
     return np.array(runoff)
 
 #######################################################################
@@ -305,7 +310,15 @@ def runoff_execution(fun_test, X, gdir,
 
     all_experiments = []
 
-    # Shared parameters (same for all experiments)
+    # PROGRESS BAR FOR SAMPLES
+    pbar = tqdm(total=len(X), desc="Processing samples", unit="sample", dynamic_ncols=True)
+
+    # Callback used by each entity task
+    def update_pbar():
+        pbar.update(1)
+        pbar.refresh()   # fix buffering on HPC
+
+    # Shared parameters for each sample
     common = dict(
         years=years,
         init_model_yr=init_model_yr,
@@ -316,29 +329,28 @@ def runoff_execution(fun_test, X, gdir,
         csv_filepath=csv_filepath,
         params_csv_filepath=params_csv_filepath,
         run_task=run_task,
-        mb_model_method=mb_model_method,
+        mb_model_method=mb_model_method
     )
 
-    pbar = tqdm(total=len(X), desc="Processing", unit="item")
-
-    # One experiment per sample
+    # Build experiment list
     for i, sample_row in enumerate(X):
         kw = dict(common)
         kw.update(
             mb_params=sample_row,
             row_index=i,
-            settings_filesuffix=f"_exp{i}" # <- writing a new settings_filesuffix with each sample
+            settings_filesuffix=f"_exp{i}",
+            progress_callback=update_pbar
         )
         all_experiments.append((gdir, kw))
-        time.sleep(0.1)
-        pbar.update(1)
-    
+
+    # Run experiments
     old_continue_one_error = cfg.PARAMS["continue_on_error"]
     cfg.PARAMS["continue_on_error"] = True
-    # Run all experiments in parallel
     out_list = workflow.execute_entity_task(fun_test, all_experiments)
-    print(type(out_list), len(out_list))
     cfg.PARAMS["continue_on_error"] = old_continue_one_error
+
+    # Finish progress bar
+    pbar.close()
 
     return hydro_output_metric_calculator(out_list)
 
