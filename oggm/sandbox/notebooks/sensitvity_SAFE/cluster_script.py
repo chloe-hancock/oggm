@@ -1,79 +1,94 @@
+#!/usr/bin/env python3
+
 import matplotlib.pyplot as plt
 import os
 import numpy as np
 import scipy.stats as st
 import pandas as pd
+from tqdm import tqdm
+import time
+
 from oggm import cfg, workflow, utils
 from oggm.core import flowline, sensitivity
 from oggm import tasks
 from oggm.core.massbalance import MultipleFlowlineMassBalance
+
+import safepython.PAWN as PAWN # Module to calculate PAWN sensitivity indices
 from safepython.sampling import AAT_sampling # Functions to perform the input sampling
+from safepython.util import aggregate_boot # Functions to perform bootstrapping
+import safepython.plot_functions as pf
+
 from oggm.core.sensitivity import hydro_output_metric_calculator, run_with_runoff_for_sa, runoff_execution, colour_plotting_timeseries,mean_diff, parameter_bounding, spinup_area_volume
 
-cfg.initialize(logging_level='WARNING')
-cfg.PATHS['working_dir'] = "/mnt/c/Users/yg25019/Documents/sensitivity_output"
-cfg.PARAMS['border'] = 10
-cfg.PARAMS['store_model_geometry'] = True
-cfg.PARAMS['min_ice_thick_for_length'] = 1  # a glacier is when ice thicker than 1m
+def main():
 
-rgi_ids = ['RGI60-14.00063']
+	cfg.initialize(logging_level='CRITICAL')
+	cfg.PATHS['working_dir'] = "~/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs"
+	cfg.PARAMS['border'] = 10
+	cfg.PARAMS['store_model_geometry'] = True
+	cfg.PARAMS['min_ice_thick_for_length'] = 1  # a glacier is when ice thicker than 1m
 
-cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
-cfg.PARAMS['mp_processes'] = os.cpu_count()  # Use all available cores
+	rgi_ids = ['RGI60-14.00063']
 
-# We pick the elevation-bands glaciers because they run a bit faster - but they create more step changes in the area outputs
-base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
-gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)
+	cfg.PARAMS['use_multiprocessing'] = False  # To speed up sensitivity analysis runs
+	# cfg.PARAMS['mp_processes'] = os.cpu_count()  # Use all available cores
+	cfg.PARAMS['mp_processes'] = 1
 
-# Get the Hugonnet mass balance and set up dataframe
-geo_df = utils.get_geodetic_mb_dataframe()
-geo_df.loc[rgi_ids]
+	# We pick the elevation-bands glaciers because they run a bit faster - but they create more step changes in the area outputs
+	base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
+	gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)
 
-# Hydrological model workflow steps before running with hydro
-cfg.PARAMS['evolution_model'] = 'FluxBased'
-cfg.PARAMS['store_model_geometry'] = True
-cfg.PARAMS['error_when_glacier_reaches_boundaries'] = False
+	# Get the Hugonnet mass balance and set up dataframe
+	geo_df = utils.get_geodetic_mb_dataframe()
+	geo_df.loc[rgi_ids]
 
-num_of_glaciers = len(gdirs)
+	# Hydrological model workflow steps before running with hydro
+	cfg.PARAMS['evolution_model'] = 'FluxBased'
+	cfg.PARAMS['store_model_geometry'] = True
+	cfg.PARAMS['error_when_glacier_reaches_boundaries'] = False
 
-rgi_dates = []
-rgi_area_km2s = []
+	num_of_glaciers = len(gdirs)
 
-for gdir in gdirs:
-    rgi_dates.append(gdir.rgi_date)
-    rgi_area_km2s.append(gdir.rgi_area_km2)
+	rgi_dates = []
+	rgi_area_km2s = []
 
-    # And match the Hugonnet
-geo_df = utils.get_geodetic_mb_dataframe()
+	for gdir in gdirs:
+    		rgi_dates.append(gdir.rgi_date)
+    		rgi_area_km2s.append(gdir.rgi_area_km2)
 
-mask = geo_df['period'].eq('2000-01-01_2020-01-01')
-selected_gdirs_geo_df = geo_df.loc[geo_df.index.isin(rgi_ids) & mask]
+    	# And match the Hugonnet
+	geo_df = utils.get_geodetic_mb_dataframe()
 
-hugonnet_dmdtda = selected_gdirs_geo_df['dmdtda'].values * 1000
-hugonnet_err_dmdtda = selected_gdirs_geo_df['err_dmdtda'].values * 1000
+	mask = geo_df['period'].eq('2000-01-01_2020-01-01')
+	selected_gdirs_geo_df = geo_df.loc[geo_df.index.isin(rgi_ids) & mask]
 
-X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
-M = len(X_labels)
+	hugonnet_dmdtda = selected_gdirs_geo_df['dmdtda'].values * 1000
+	hugonnet_err_dmdtda = selected_gdirs_geo_df['err_dmdtda'].values * 1000
 
-# gdir_hef.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this? 
-distr_fun = st.uniform # Uniform distribution for all parameters
-x_min = np.array([1.5, 0.1, -5.0]) # Minimum values for each parameter
-x_max = np.array([3.0, 6.0, 0.0]) # Maximum values for each parameter
+	X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
+	M = len(X_labels)
 
-distr_par = [np.nan] * M
-for i in range(M):
-    distr_par[i] = [x_min[i], x_max[i] - x_min[i]]
-    
-samp_strat = 'lhs' 
+	# gdir_hef.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this? 
+	distr_fun = st.uniform # Uniform distribution for all parameters
+	x_min = np.array([1.5, 0.1, -5.0]) # Minimum values for each parameter
+	x_max = np.array([3.0, 6.0, 0.0]) # Maximum values for each parameter
 
-N = 1000 # Number of samples
+	distr_par = [np.nan] * M
+	for i in range(M):
+    		distr_par[i] = [x_min[i], x_max[i] - x_min[i]]
 
-X = AAT_sampling(samp_strat, M, distr_fun, distr_par, N) # Generate the samples, start all with the same initial boundaries
+	samp_strat = 'lhs'
 
-res_dict = {}
+	N = 10 # Number of samples
 
-for i in range(num_of_glaciers):
-    YY = runoff_execution(fun_test = run_with_runoff_for_sa, 
+	X = AAT_sampling(samp_strat, M, distr_fun, distr_par, N) # Generate the samples, start all with the same initial boundaries
+
+	res_dict = {}
+
+	pbar = tqdm(total=N, desc="Processing", unit="item")
+
+	for i in range(num_of_glaciers):
+    		YY = runoff_execution(fun_test = run_with_runoff_for_sa,
                      X = X, # All samples
                      gdir = gdirs[i], # Hinteresfirner Glacier directory
                      years =range(1901, 2020), # years
@@ -86,5 +101,12 @@ for i in range(num_of_glaciers):
                      params_csv_filepath=str(i)+'_pakistan_params.csv',
                      run_task = tasks.run_from_climate_data,
                      mb_model_method = MultipleFlowlineMassBalance)
-    
-    res_dict[i] = YY
+
+
+		time.sleep(0.1)
+		pbar.update(1)
+
+    		res_dict[i] = YY
+
+if __name__ == "__main__":
+	main()

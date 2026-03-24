@@ -11,6 +11,7 @@ import pandas as pd
 from oggm import cfg, workflow
 import matplotlib.pyplot as plt
 
+
 # Module logger
 log = logging.getLogger(__name__)
 
@@ -163,7 +164,6 @@ def run_with_runoff_for_sa(gdir, *,
     if save_output:
         df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
         param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
-
     return np.array(runoff)
 
 #######################################################################
