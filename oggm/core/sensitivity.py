@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from oggm import cfg, workflow
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+import time
 
 
 # Module logger
@@ -317,6 +319,8 @@ def runoff_execution(fun_test, X, gdir,
         mb_model_method=mb_model_method,
     )
 
+    pbar = tqdm(total=len(X), desc="Processing", unit="item")
+
     # One experiment per sample
     for i, sample_row in enumerate(X):
         kw = dict(common)
@@ -326,6 +330,8 @@ def runoff_execution(fun_test, X, gdir,
             settings_filesuffix=f"_exp{i}" # <- writing a new settings_filesuffix with each sample
         )
         all_experiments.append((gdir, kw))
+        time.sleep(0.1)
+        pbar.update(1)
     
     old_continue_one_error = cfg.PARAMS["continue_on_error"]
     cfg.PARAMS["continue_on_error"] = True

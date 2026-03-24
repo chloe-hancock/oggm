@@ -5,8 +5,6 @@ import os
 import numpy as np
 import scipy.stats as st
 import pandas as pd
-from tqdm import tqdm
-import time
 
 from oggm import cfg, workflow, utils
 from oggm.core import flowline, sensitivity
@@ -85,8 +83,6 @@ def main():
 
 	res_dict = {}
 
-	pbar = tqdm(total=N, desc="Processing", unit="item")
-
 	for i in range(num_of_glaciers):
 			YY = runoff_execution(fun_test = run_with_runoff_for_sa,
 					 X = X, # All samples
@@ -101,10 +97,6 @@ def main():
 					 params_csv_filepath=str(i)+'_pakistan_params.csv',
 					 run_task = tasks.run_from_climate_data,
 					 mb_model_method = MultipleFlowlineMassBalance)
-
-
-			time.sleep(0.1)
-			pbar.update(1)
 
 			res_dict[i] = YY
 
