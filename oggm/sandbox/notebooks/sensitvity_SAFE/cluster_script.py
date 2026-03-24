@@ -53,10 +53,10 @@ def main():
 	rgi_area_km2s = []
 
 	for gdir in gdirs:
-    		rgi_dates.append(gdir.rgi_date)
-    		rgi_area_km2s.append(gdir.rgi_area_km2)
+		rgi_dates.append(gdir.rgi_date)
+		rgi_area_km2s.append(gdir.rgi_area_km2)
 
-    	# And match the Hugonnet
+		# And match the Hugonnet
 	geo_df = utils.get_geodetic_mb_dataframe()
 
 	mask = geo_df['period'].eq('2000-01-01_2020-01-01')
@@ -75,8 +75,8 @@ def main():
 
 	distr_par = [np.nan] * M
 	for i in range(M):
-    		distr_par[i] = [x_min[i], x_max[i] - x_min[i]]
-
+			distr_par[i] = [x_min[i], x_max[i] - x_min[i]]
+			
 	samp_strat = 'lhs'
 
 	N = 10 # Number of samples
@@ -88,25 +88,25 @@ def main():
 	pbar = tqdm(total=N, desc="Processing", unit="item")
 
 	for i in range(num_of_glaciers):
-    		YY = runoff_execution(fun_test = run_with_runoff_for_sa,
-                     X = X, # All samples
-                     gdir = gdirs[i], # Hinteresfirner Glacier directory
-                     years =range(1901, 2020), # years
-                     init_model_yr = 1901, # Simulation start year - needs to be early enough to allow for spinup before the period we are interested in
-                     ys =1901, # Start of the simulation
-                     min_ys = 1901, # Minimum start year
-                     ref_area_yr = rgi_dates[i], # Reference area year - needs to be a year for which we have observed area data for the glacier, so we can use this to constrain the modelled glacier area during the spinup period
-                     spinup_period =95, # Spinup period in years (we are cutting this off, once the glacier has reached an equilibrium state, but this can be changed to a different period if desired)
-                     csv_filepath = str(i)+'_pakistan_runoff_output.csv',
-                     params_csv_filepath=str(i)+'_pakistan_params.csv',
-                     run_task = tasks.run_from_climate_data,
-                     mb_model_method = MultipleFlowlineMassBalance)
+			YY = runoff_execution(fun_test = run_with_runoff_for_sa,
+					 X = X, # All samples
+					 gdir = gdirs[i], # Hinteresfirner Glacier directory
+					 years =range(1901, 2020), # years
+					 init_model_yr = 1901, # Simulation start year - needs to be early enough to allow for spinup before the period we are interested in
+					 ys =1901, # Start of the simulation
+					 min_ys = 1901, # Minimum start year
+					 ref_area_yr = rgi_dates[i], # Reference area year - needs to be a year for which we have observed area data for the glacier, so we can use this to constrain the modelled glacier area during the spinup period
+					 spinup_period =95, # Spinup period in years (we are cutting this off, once the glacier has reached an equilibrium state, but this can be changed to a different period if desired)
+					 csv_filepath = str(i)+'_pakistan_runoff_output.csv',
+					 params_csv_filepath=str(i)+'_pakistan_params.csv',
+					 run_task = tasks.run_from_climate_data,
+					 mb_model_method = MultipleFlowlineMassBalance)
 
 
-		time.sleep(0.1)
-		pbar.update(1)
+			time.sleep(0.1)
+			pbar.update(1)
 
-    		res_dict[i] = YY
+			res_dict[i] = YY
 
 if __name__ == "__main__":
 	main()
