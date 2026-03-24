@@ -15,6 +15,7 @@ import safepython.PAWN as PAWN # Module to calculate PAWN sensitivity indices
 from safepython.sampling import AAT_sampling # Functions to perform the input sampling
 from safepython.util import aggregate_boot # Functions to perform bootstrapping
 import safepython.plot_functions as pf
+import multiprocessing as mp
 
 from oggm.core.sensitivity import hydro_output_metric_calculator, run_with_runoff_for_sa, runoff_execution, colour_plotting_timeseries,mean_diff, parameter_bounding, spinup_area_volume
 
@@ -28,8 +29,10 @@ def main():
 
 	rgi_ids = ['RGI60-14.00063']
 
-	cfg.PARAMS['use_multiprocessing'] = False  # To speed up sensitivity analysis runs
-	cfg.PARAMS['mp_processes'] = 1
+	cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
+	cfg.PARAMS['mp_processes'] = 32
+
+	mp.set_start_method("spawn", force=True)
 
 	# We pick the elevation-bands glaciers because they run a bit faster - but they create more step changes in the area outputs
 	base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
@@ -100,5 +103,6 @@ def main():
 
 			res_dict[i] = YY
 
+	print("DONE", YY)
 if __name__ == "__main__":
 	main()

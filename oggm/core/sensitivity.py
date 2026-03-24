@@ -34,7 +34,7 @@ def progress_callback(i):
 
     if PROGRESS_BAR is None:
         PROGRESS_BAR = tqdm(total=PROGRESS_TOTAL, disable=True)
-        ROGRESS_BAR.update(1)
+        PROGRESS_BAR.update(1)
 
     if (i % PROGRESS_UPDATE == 0) or (i == PROGRESS_TOTAL):
         elapsed = time.time() - PROGRESS_START_T
