@@ -26,11 +26,11 @@ def main():
 	cfg.PARAMS['store_model_geometry'] = True
 	cfg.PARAMS['min_ice_thick_for_length'] = 1  # a glacier is when ice thicker than 1m
 
-	rgi_ids = ['RGI60-14.00063']
+	rgi_ids = ['RGI60-14.00063', 'RGI60-14.00064']
 
-	cfg.PARAMS['use_multiprocessing'] = False  # To speed up sensitivity analysis runs
+	cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
 	# cfg.PARAMS['mp_processes'] = os.cpu_count()  # Use all available cores
-	cfg.PARAMS['mp_processes'] = 1
+	# cfg.PARAMS['mp_processes'] = 1
 
 	# We pick the elevation-bands glaciers because they run a bit faster - but they create more step changes in the area outputs
 	base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
@@ -88,6 +88,7 @@ def main():
 					 X = X, # All samples
 					 gdir = gdirs[i], # Hinteresfirner Glacier directory
 					 years =range(1901, 2020), # years
+					 glacier_index = i,
 					 init_model_yr = 1901, # Simulation start year - needs to be early enough to allow for spinup before the period we are interested in
 					 ys =1901, # Start of the simulation
 					 min_ys = 1901, # Minimum start year

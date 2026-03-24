@@ -17,6 +17,37 @@ import sys
 # Module logger
 log = logging.getLogger(__name__)
 
+# Globals used by the callback
+PROGRESS_TOTAL = None
+PROGRESS_START_T = None
+PROGRESS_UPDATE = None
+PROGRESS_GLACIER = None
+PROGRESS_BAR = None
+
+def progress_callback(i):
+    """Multiprocessing-safe progress callback with PROGRESS_BAR support."""
+    global PROGRESS_BAR, PROGRESS_TOTAL, PROGRESS_START_T, PROGRESS_UPDATE, PROGRESS_GLACIER
+
+    # Lazy initialization in each process
+    if PROGRESS_UPDATE is None or PROGRESS_TOTAL is None or PROGRESS_GLACIER is None:
+        return   # globals not set yet, skip printing
+
+    if PROGRESS_BAR is None:
+        PROGRESS_BAR = tqdm(total=PROGRESS_TOTAL, disable=True)
+        ROGRESS_BAR.update(1)
+
+    if (i % PROGRESS_UPDATE == 0) or (i == PROGRESS_TOTAL):
+        elapsed = time.time() - PROGRESS_START_T
+        bar_str = tqdm.format_meter(
+            n=i,
+            total=PROGRESS_TOTAL,
+            elapsed=elapsed,
+            ncols=40,
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} samples"
+        )
+        print(f"Glacier {PROGRESS_GLACIER}: {bar_str}",
+              file=sys.stderr, flush=True)
+
 #######################################################################
 # Function for calculating the runoff outputs for Sensitivity Analysis
 #######################################################################
@@ -79,18 +110,6 @@ def run_with_runoff_for_sa(gdir, *,
         any of the `run_*`` tasks in the oggm.flowline module.
         The mass balance model used needs to have the `add_climate` output
         kwarg available though.
-INFO:    gocryptfs not found, will not be able to use gocryptfs
-/   0.0 B Elapsed Time: 0:00:00
-|  -1.0 B Elapsed Time: 0:00:00
-  0% of 679.1 MiB |                      | Elapsed Time: 0:00:00 ETA:  --:--:--
-100% of 679.1 MiB |######################| Elapsed Time: 0:00:03 Time:  0:00:03
-  0% of  38.4 MiB |                      | Elapsed Time: 0:00:00 ETA:  --:--:--
-100% of  38.4 MiB |######################| Elapsed Time: 0:00:00 Time:  0:00:00
-^MProcessing samples:   0%|          | 0/100 [00:00<?, ?sample/s]^MProcessing samples:   1%|          | 1/100 [00:04<07:14,  4.39s/sample]^MProcessing samples:   1%|          | 1/100 [00:04<07:14,  4.39s/sample]^MProcessing samples:   2%|▏         | 2/100 [00:05<04:0>
-
-
-
-
     save_output: bool
         Whether to save the output to a CSV file or not. Default is True.
     """
@@ -181,7 +200,7 @@ INFO:    gocryptfs not found, will not be able to use gocryptfs
         param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
     
     if progress_callback is not None:
-        progress_callback()
+        progress_callback(row_index + 1)
 
     return np.array(runoff)
 
@@ -295,7 +314,6 @@ def hydro_output_metric_calculator(runoff):
 
     runoff: np.array
         The runoff time series generated from the oggm_sim method, when the output is the runoff time series.
-
     Return:
     ------------
 
@@ -304,6 +322,7 @@ def hydro_output_metric_calculator(runoff):
             - The annual runoff mean.
             - The annual runoff standard deviation.
     '''
+
     YY = np.nan * np.ones((len(runoff), 2))
 
     for i, x in enumerate(runoff):
@@ -312,34 +331,30 @@ def hydro_output_metric_calculator(runoff):
 
     return YY
 
+
 #######################################################################
-# Execute the runoff, both sequentially and in multiprocessing using the 
+# Execute the runoff, both sequentially and in multiprocessing using the
 #######################################################################
 def runoff_execution(fun_test, X, gdir,
-                        years, init_model_yr, ys, min_ys,
+                        years, glacier_index, init_model_yr, ys, min_ys,
                         ref_area_yr, spinup_period,
                         csv_filepath, params_csv_filepath, run_task, mb_model_method):
 
+    global PROGRESS_TOTAL, PROGRESS_START_T, PROGRESS_UPDATE, PROGRESS_GLACIER, PROGRESS_BAR
+
+
+    PROGRESS_TOTAL = len(X)
+    PROGRESS_START_T = time.time()
+    PROGRESS_UPDATE = 5
+    PROGRESS_GLACIER = glacier_index
+    PROGRESS_BAR = None
+
     all_experiments = []
 
-    # PROGRESS BAR FOR SAMPLES
-    pbar = tqdm(total=len(X), 
-		desc="Processing samples", 
-		unit="sample", 
-		dynamic_ncols=False,
-		mininterval=1,
-		ascii=True,
-		file=sys.stderr,
-		disable=False)
-
-    # Callback used by each entity task
-    def update_pbar():
-        pbar.update(1)
-	tqdm.write(f"Processed {pbar.n}/{pbar.total} samples", file=sys.stderr)
+    total = len(X)
 
     # Shared parameters for each sample
-    common = dict(
-        years=years,
+    common = dict(        years=years,
         init_model_yr=init_model_yr,
         ys=ys,
         min_ys=min_ys,
@@ -358,7 +373,7 @@ def runoff_execution(fun_test, X, gdir,
             mb_params=sample_row,
             row_index=i,
             settings_filesuffix=f"_exp{i}",
-            progress_callback=update_pbar
+            progress_callback=progress_callback
         )
         all_experiments.append((gdir, kw))
 
@@ -368,11 +383,7 @@ def runoff_execution(fun_test, X, gdir,
     out_list = workflow.execute_entity_task(fun_test, all_experiments)
     cfg.PARAMS["continue_on_error"] = old_continue_one_error
 
-    # Finish progress bar
-    pbar.close()
-
     return hydro_output_metric_calculator(out_list)
-
 
 #######################################################################
 # The goodness of fit functions for the mass balance values 
@@ -523,8 +534,8 @@ def runoff_execution_full_spinup(fun_test, X, gdir,
         kw.update(
             mb_params=sample_row,
             row_index=i,
-            settings_filesuffix=f"_exp{i}"   # <- writing a new settings_filesuffix with each sample
-        )
+            settings_filesuffix=f"_exp{i}")
+
         all_experiments.append((gdir, kw))
     
     old_continue_one_error = cfg.PARAMS["continue_on_error"]
