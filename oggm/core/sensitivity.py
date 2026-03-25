@@ -203,7 +203,7 @@ def run_with_runoff_for_sa(gdir, *,
     
     if progress_callback is not None:
         progress_callback(row_index + 1)
-
+    print(runoff)
     return np.array(runoff)
 
 #######################################################################
@@ -356,7 +356,7 @@ def runoff_execution(fun_test, X, gdir,
     total = len(X)
 
     # Shared parameters for each sample
-    common = dict(        years=years,
+    common = dict(years=years,
         init_model_yr=init_model_yr,
         ys=ys,
         min_ys=min_ys,

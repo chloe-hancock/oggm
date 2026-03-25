@@ -25,14 +25,13 @@ def main():
         cfg.PATHS['working_dir'] = "~/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs"
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['store_model_geometry'] = True
-        cfg.PARAMS['min_ice_thick_for_length'] = 1  # a glacier is when ice thicker than 1m
-
-        rgi_ids = ['RGI60-14.00063', 'RGI60-11.00897']
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        print("WORKING DIRECTORY", cfg.PATHS['working_dir'])
+        rgi_ids = ['RGI60-14.00063']
 
         cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
-        cfg.PARAMS['mp_processes'] = 32
 
-        mp.set_start_method("spawn", force=True)
+        # mp.set_start_method("spawn", force=True)
 
         # We pick the elevation-bands glaciers because they run a bit faster - but they create more step changes in the area outputs
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
@@ -79,7 +78,7 @@ def main():
 
         samp_strat = 'lhs'
 
-        N = 100 # Number of samples
+        N = 10 # Number of samples
 
         X = AAT_sampling(samp_strat, M, distr_fun, distr_par, N) # Generate the samples, start all with the same initial boundaries
 
