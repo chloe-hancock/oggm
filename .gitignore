@@ -46,4 +46,4 @@ docs/.doctrees
 oggm/version.py
 oggm/ignore
 
-.csv
+**/glacier_outs/
