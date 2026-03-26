@@ -200,10 +200,10 @@ def run_with_runoff_for_sa(gdir, *,
     if save_output:
         df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
         param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
-    
+        time.sleep(0.05) # To ensure all jobs finish writing to the CSVs
+
     if progress_callback is not None:
         progress_callback(row_index + 1)
-    print(runoff)
     return np.array(runoff)
 
 #######################################################################
