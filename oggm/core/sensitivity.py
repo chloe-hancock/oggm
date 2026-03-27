@@ -120,6 +120,7 @@ def run_with_runoff_for_sa(gdir, *,
     except (RuntimeError):
     # If no WGMS data available create an empty frame with the right index
         mbdf = pd.DataFrame(index=years)
+
     gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
 
     # Set the parameter values
@@ -134,14 +135,21 @@ def run_with_runoff_for_sa(gdir, *,
         temp_bias=float(temp_bias),
         check_calib_params=False,
         ) 
-
     
+    
+    # Failure object template
+    failure = {
+        "row_index": row_index,
+        "params": mb_params,
+        "reason": None
+    }
+
     fls = gdir.read_pickle('inversion_flowlines') # Read flowlines
     mbdf['mod_mb'] = mb.get_specific_mb(fls=fls, year=mbdf.index) # Compute modelled mass balance  
 
     # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
-    
+
     # Uses run with hydro to calculate hydrological output, so we can calculate the runoff
     run_with_hydro(
         gdir,
@@ -159,7 +167,7 @@ def run_with_runoff_for_sa(gdir, *,
     with xr.open_dataset(gdir.get_filepath('model_diagnostics', filesuffix=file_id)) as ds:
         # The last step of hydrological output is NaN (we can't compute it for this year)
         ds = ds.isel(time=slice(0, -1)).load()
-    
+
 
     # These summed variabels give the total runoff from the glacier
     runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
@@ -170,10 +178,20 @@ def run_with_runoff_for_sa(gdir, *,
     if y1 > y2:
         log.warning(f"No valid hydrological years for parameters {mb_params}")
         return None
-    
+
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
 
+    if df_area.min() <= 0:
+        failure["reason"] = "glacier_area_zero_collapse"
+        return failure
+
+
     df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
+
+    if df_volume.min() <= 0:
+        failure["reason"] = "glacier_volume_zero_collapse"
+        return failure
+
 
     # Convert MB index to integer-year
     mbdf_annual = mbdf.loc[y1:y2].copy()
@@ -187,6 +205,10 @@ def run_with_runoff_for_sa(gdir, *,
     df_runoff = df_annual.sum(axis = 1) * 1e-9
     runoff = df_runoff.loc[y1:y2].values
 
+    if df_runoff.min() <= 0:
+        failure["reason"] = "runoff_collapsed"
+        return failure
+
     # Write the output to a csv file
     df = pd.DataFrame({
             'years': list(range(y1,y2+1)),
@@ -194,17 +216,53 @@ def run_with_runoff_for_sa(gdir, *,
             'mass_balance': df_mb,
             'area_km2': df_area,
             'volume_km3': df_volume})
-    
-    param_df = pd.DataFrame({"params": mb_params})
-    
-    if save_output:
-        df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
-        param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
-        time.sleep(0.05) # To ensure all jobs finish writing to the CSVs
 
+    param_df = pd.DataFrame({"params": mb_params})
+
+    if save_output:
+        # df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
+        # param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
+        time.sleep(0.05)
+        gdir_path = f"/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/exp_{row_index}"
+        out1 = os.path.join(gdir_path, f"{row_index}_{csv_filepath}")
+        out2 = os.path.join(gdir_path, f"{row_index}_{params_csv_filepath}")
+        df.to_csv(out1, index=False)
+        param_df.to_csv(out2, index=False)
+            
     if progress_callback is not None:
         progress_callback(row_index + 1)
+    
     return np.array(runoff)
+
+import pandas as pd
+import numpy as np
+
+def compile_faulty_rows(out_list, X):
+    failed = []
+    X_valid = []
+    runoff_valid = []
+
+    # Loop through outputs
+    for params, result in zip(X, out_list):
+
+        if isinstance(result, dict):
+            # Failure case → append failure info
+            failed.append({
+                "row_index": result.get("row_index"),
+                "params": result.get("params"),
+                "reason": result.get("reason")
+            })
+
+        else:
+            # Success → runoff array
+            runoff_valid.append(result)
+            X_valid.append(params)
+
+    # Convert fails to DataFrame
+    failed_df = pd.DataFrame(failed)
+
+    return failed_df, np.array(X_valid), runoff_valid
+
 
 #######################################################################
 # Function for Reducing Bounds - Check using Linear Regression Method
@@ -333,30 +391,21 @@ def hydro_output_metric_calculator(runoff):
 
     return YY
 
-
 #######################################################################
 # Execute the runoff, both sequentially and in multiprocessing using the
 #######################################################################
-def runoff_execution(fun_test, X, gdir,
-                        years, glacier_index, init_model_yr, ys, min_ys,
-                        ref_area_yr, spinup_period,
-                        csv_filepath, params_csv_filepath, run_task, mb_model_method):
+def runoff_execution(
+        fun_test, X, gdir,
+        years, glacier_index, init_model_yr, ys, min_ys,
+        ref_area_yr, spinup_period,
+        csv_filepath, params_csv_filepath,
+        run_task, mb_model_method):
 
-    global PROGRESS_TOTAL, PROGRESS_START_T, PROGRESS_UPDATE, PROGRESS_GLACIER, PROGRESS_BAR
-
-
-    PROGRESS_TOTAL = len(X)
-    PROGRESS_START_T = time.time()
-    PROGRESS_UPDATE = 5
-    PROGRESS_GLACIER = glacier_index
-    PROGRESS_BAR = None
-
+    import shutil
     all_experiments = []
 
-    total = len(X)
-
-    # Shared parameters for each sample
-    common = dict(years=years,
+    common = dict(
+        years=years,
         init_model_yr=init_model_yr,
         ys=ys,
         min_ys=min_ys,
@@ -365,27 +414,42 @@ def runoff_execution(fun_test, X, gdir,
         csv_filepath=csv_filepath,
         params_csv_filepath=params_csv_filepath,
         run_task=run_task,
-        mb_model_method=mb_model_method
+        mb_model_method=mb_model_method,
     )
 
-    # Build experiment list
+    original_gdir = gdir
+    base_dir = cfg.PATHS['working_dir']
+
     for i, sample_row in enumerate(X):
+        # make isolated directory
+        exp_dir = os.path.join(base_dir, f"exp_{i}")
+        if os.path.exists(exp_dir):
+            shutil.rmtree(exp_dir)
+        shutil.copytree(original_gdir.dir, exp_dir)
+
+        # load it correctly
+        gdir_i = workflow.init_glacier_directories(rgidf=original_gdir.rgi_id)[0]
+
+        # build kwargs
         kw = dict(common)
         kw.update(
             mb_params=sample_row,
             row_index=i,
             settings_filesuffix=f"_exp{i}",
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
         )
-        all_experiments.append((gdir, kw))
 
-    # Run experiments
-    old_continue_one_error = cfg.PARAMS["continue_on_error"]
-    cfg.PARAMS["continue_on_error"] = True
+        # append correctly
+        all_experiments.append((gdir_i, kw))
+
+    # run
+    old_flag = cfg.PARAMS['continue_on_error']
+    cfg.PARAMS['continue_on_error'] = True
+
     out_list = workflow.execute_entity_task(fun_test, all_experiments)
-    cfg.PARAMS["continue_on_error"] = old_continue_one_error
+    cfg.PARAMS['continue_on_error'] = old_flag
 
-    return hydro_output_metric_calculator(out_list)
+    return out_list
 
 #######################################################################
 # The goodness of fit functions for the mass balance values 
@@ -544,7 +608,6 @@ def runoff_execution_full_spinup(fun_test, X, gdir,
     cfg.PARAMS["continue_on_error"] = True
     # Run all experiments in parallel
     out_list = workflow.execute_entity_task(fun_test, all_experiments)
-    print(type(out_list), len(out_list))
     cfg.PARAMS["continue_on_error"] = old_continue_one_error
 
     return out_list

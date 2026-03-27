@@ -26,16 +26,17 @@ cfg.PATHS['working_dir'] = "~/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_S
 cfg.PARAMS['border'] = 10
 cfg.PARAMS['store_model_geometry'] = True
 cfg.PARAMS['min_ice_thick_for_length'] = 1
-print("WORKING DIRECTORY", cfg.PATHS['working_dir'])
 rgi_ids = ['RGI60-14.00063']
 cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis run
-# mp.set_start_method("spawn", force=True
+
 # We pick the elevation-bands glaciers because they run a bit faster - but they create more step changes in the area outputs
 base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
 gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)
+# gdirs = workflow.init_glacier_directories(rgi_ids)
+
 
 num_of_glaciers = 1
-N = 5000
+N = 100
 cfg.PATHS['working_dir'] = "~/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs"
 rgi_ids = ['RGI60-14.00063']
 
@@ -78,18 +79,21 @@ for j in range(num_of_glaciers):
 
     for i in range(N):
         try:
-            df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + '_' + str(j) +'_pakistan_runoff_output.csv')
+            df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + "exp_" + str(i) + '/' + str(i) + '_' + str(j) +'_pakistan_runoff_output.csv')
             mass_balance_samples.append(df['mass_balance'].values)
             years.append(df['years'].values)
             runoff_samples.append(df['runoff_Mt'].values)
             area_samples.append(df['area_km2'].values)
             volume_samples.append(df['volume_km3'].values)
 
-            mb_param_df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + '_' + str(j) +'_pakistan_params.csv') 
+            mb_param_df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + "exp_" + str(i) + '/' + str(i) + '_' + str(j) +'_pakistan_params.csv') 
             params.append(mb_param_df['params'])
         except:
             print(f"There is no simulation for the index {i}! Something has gone wrong here!")
+            continue
 
+    N = len(params)
+    print(N)
     mass_balance_dict[j] = mass_balance_samples
     years_dict[j] = years
     runoff_dict[j] = runoff_samples
@@ -105,7 +109,6 @@ for j in range(num_of_glaciers):
 
 # compile csvs to plot timeseries and plot to view the mass balance time series for each of the 50 samples, to see how they are looking and check that they make sense before we calculate the sensitivity indices
 plt.figure(figsize=(13,num_of_glaciers*4))
-
 for j in range(num_of_glaciers):
     for i in range(N):
         plt.subplot(num_of_glaciers,1,j+1)
