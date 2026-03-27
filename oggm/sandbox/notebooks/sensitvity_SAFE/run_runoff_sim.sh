@@ -18,7 +18,7 @@ MIN_ICE_THICK_FOR_LEN=1
 RGI_IDS='RGI60-14.00063'
 MULTI_PROCESS=True
 BASE_URL='https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'    
-N=100
+N=5000
 YR_START=1901
 YR_END=2020
 SPINUP_PERIOD=95
@@ -32,7 +32,7 @@ set -e
 # 1. Activate Conda
 #######################################
 source /home/local/sw/miniconda/3.9/etc/profile.d/conda.sh
-conda activate oggm_docs
+conda activate oggm_env
 
 # Ensure Python prints immediately
 export PYTHONUNBUFFERED=1

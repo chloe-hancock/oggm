@@ -26,7 +26,7 @@ PROGRESS_GLACIER = None
 PROGRESS_BAR = None
 
 
-def progress_callback(i):
+def progress_callback_fn(i):
     """Fully spawn-safe parallel progress bar callback."""
     global PROGRESS_TOTAL, PROGRESS_UPDATE, PROGRESS_GLACIER, PROGRESS_START_T, PROGRESS_BAR
 
@@ -224,8 +224,8 @@ def run_with_runoff_for_sa(gdir, *,
         param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
     
     if progress_callback is not None:
-        progress_callback(row_index + 1)
-    print(runoff)
+        progress_callback_fn(row_index + 1)
+
     return np.array(runoff)
 
 import pandas as pd
@@ -430,7 +430,7 @@ def runoff_execution(
             mb_params=sample_row,
             row_index=i,
             settings_filesuffix=f"_exp{i}",
-            progress_callback=progress_callback,
+            progress_callback=progress_callback_fn,
         )
 
         # append correctly
