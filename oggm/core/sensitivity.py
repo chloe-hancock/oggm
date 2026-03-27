@@ -220,18 +220,12 @@ def run_with_runoff_for_sa(gdir, *,
     param_df = pd.DataFrame({"params": mb_params})
 
     if save_output:
-        # df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
-        # param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
-        time.sleep(0.05)
-        gdir_path = f"/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/exp_{row_index}"
-        out1 = os.path.join(gdir_path, f"{row_index}_{csv_filepath}")
-        out2 = os.path.join(gdir_path, f"{row_index}_{params_csv_filepath}")
-        df.to_csv(out1, index=False)
-        param_df.to_csv(out2, index=False)
-            
+        df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
+        param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
+    
     if progress_callback is not None:
         progress_callback(row_index + 1)
-    
+    print(runoff)
     return np.array(runoff)
 
 import pandas as pd

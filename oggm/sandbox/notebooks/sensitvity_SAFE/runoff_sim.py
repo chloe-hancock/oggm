@@ -68,7 +68,9 @@ def main():
         cfg.PARAMS['min_ice_thick_for_length'] = args.min_ice_thick
         rgi_ids = [args.rgi_ids]
 
-        cfg.PARAMS['use_multiprocessing'] = args.multi_process  # To speed up sensitivity analysis runs
+        cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
+
+        # mp.set_start_method("spawn", force=True)
 
         # We pick the elevation-bands glaciers because they run a bit faster - but they create more step changes in the area outputs
         base_url = args.base_url
@@ -116,7 +118,7 @@ def main():
 
         samp_strat = 'lhs'
 
-        N = args.N # Number of samples
+        N = 10 # Number of samples
 
         X = AAT_sampling(samp_strat, M, distr_fun, distr_par, N) # Generate the samples, start all with the same initial boundaries
         res_dict = {}
