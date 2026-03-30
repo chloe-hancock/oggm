@@ -109,8 +109,8 @@ def main():
 
         # gdir_hef.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
         distr_fun = st.uniform # Uniform distribution for all parameters
-        x_min = np.array([1.5, 1.0, -5.0]) # Minimum values for each parameter
-        x_max = np.array([3.0, 6.0, 0.0]) # Maximum values for each parameter
+        x_min = np.array([1.5, 0.1, -15.0]) # Minimum values for each parameter
+        x_max = np.array([17.0, 10.0, 15.0]) # Maximum values for each parameter
 
         distr_par = [np.nan] * M
         for i in range(M):

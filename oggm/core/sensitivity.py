@@ -183,7 +183,8 @@ def run_with_runoff_for_sa(gdir, *,
 
     if df_area.min() <= 0:
         failure["reason"] = "glacier_area_zero_collapse"
-        return failure
+        # return failure
+        print("Area has collapsed!")
 
 
     df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
@@ -411,18 +412,7 @@ def runoff_execution(
         mb_model_method=mb_model_method,
     )
 
-    original_gdir = gdir
-    base_dir = cfg.PATHS['working_dir']
-
     for i, sample_row in enumerate(X):
-        # make isolated directory
-        exp_dir = os.path.join(base_dir, f"exp_{i}")
-        if os.path.exists(exp_dir):
-            shutil.rmtree(exp_dir)
-        shutil.copytree(original_gdir.dir, exp_dir)
-
-        # load it correctly
-        gdir_i = workflow.init_glacier_directories(rgidf=original_gdir.rgi_id)[0]
 
         # build kwargs
         kw = dict(common)
@@ -433,8 +423,8 @@ def runoff_execution(
             progress_callback=progress_callback_fn,
         )
 
-        # append correctly
-        all_experiments.append((gdir_i, kw))
+        # append
+        all_experiments.append((gdir, kw))
 
     # run
     old_flag = cfg.PARAMS['continue_on_error']
