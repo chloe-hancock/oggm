@@ -10,7 +10,7 @@ from safepython.sampling import AAT_sampling # Functions to perform the input sa
 import os
 import time
 
-from oggm.core.sensitivity import run_with_runoff_for_sa, runoff_execution, compile_faulty_rows
+from oggm.core.sensitivity import run_with_runoff_for_sa, runoff_execution
 
 import argparse
 
@@ -148,8 +148,6 @@ def main():
 
                 res_dict[i] = YY
                 print("DONE Glacier: " + str(i))
-
-                print("The faulty rows", compile_faulty_rows(YY, X))
 
 if __name__ == "__main__":
         main()

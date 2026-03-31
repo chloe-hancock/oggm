@@ -135,14 +135,6 @@ def run_with_runoff_for_sa(gdir, *,
         temp_bias=float(temp_bias),
         check_calib_params=False,
         ) 
-    
-    
-    # Failure object template
-    failure = {
-        "row_index": row_index,
-        "params": mb_params,
-        "reason": None
-    }
 
     fls = gdir.read_pickle('inversion_flowlines') # Read flowlines
     mbdf['mod_mb'] = mb.get_specific_mb(fls=fls, year=mbdf.index) # Compute modelled mass balance  
@@ -181,18 +173,7 @@ def run_with_runoff_for_sa(gdir, *,
 
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
 
-    if df_area.min() <= 0:
-        failure["reason"] = "glacier_area_zero_collapse"
-        # return failure
-        print("Area has collapsed!")
-
-
     df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
-
-    if df_volume.min() <= 0:
-        failure["reason"] = "glacier_volume_zero_collapse"
-        return failure
-
 
     # Convert MB index to integer-year
     mbdf_annual = mbdf.loc[y1:y2].copy()
@@ -205,10 +186,6 @@ def run_with_runoff_for_sa(gdir, *,
     # Convert runoff from kg → Mt-equivalent and sum components
     df_runoff = df_annual.sum(axis = 1) * 1e-9
     runoff = df_runoff.loc[y1:y2].values
-
-    if df_runoff.min() <= 0:
-        failure["reason"] = "runoff_collapsed"
-        return failure
 
     # Write the output to a csv file
     df = pd.DataFrame({
@@ -228,36 +205,6 @@ def run_with_runoff_for_sa(gdir, *,
         progress_callback_fn(row_index + 1)
 
     return np.array(runoff)
-
-import pandas as pd
-import numpy as np
-
-def compile_faulty_rows(out_list, X):
-    failed = []
-    X_valid = []
-    runoff_valid = []
-
-    # Loop through outputs
-    for params, result in zip(X, out_list):
-
-        if isinstance(result, dict):
-            # Failure case → append failure info
-            failed.append({
-                "row_index": result.get("row_index"),
-                "params": result.get("params"),
-                "reason": result.get("reason")
-            })
-
-        else:
-            # Success → runoff array
-            runoff_valid.append(result)
-            X_valid.append(params)
-
-    # Convert fails to DataFrame
-    failed_df = pd.DataFrame(failed)
-
-    return failed_df, np.array(X_valid), runoff_valid
-
 
 #######################################################################
 # Function for Reducing Bounds - Check using Linear Regression Method
