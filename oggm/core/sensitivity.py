@@ -30,7 +30,7 @@ def progress_callback_fn(i):
     """Fully spawn-safe parallel progress bar callback."""
     global PROGRESS_TOTAL, PROGRESS_UPDATE, PROGRESS_GLACIER, PROGRESS_START_T, PROGRESS_BAR
 
-    # Lazy init: workers initialize on first call
+    # Workers initialize on first call
     if PROGRESS_TOTAL is None:
         PROGRESS_TOTAL   = int(os.environ["OGGM_CB_TOTAL"])
         PROGRESS_UPDATE  = int(os.environ["OGGM_CB_UPDATE"])
@@ -65,8 +65,9 @@ def run_with_runoff_for_sa(gdir, *,
                     ref_area_yr=None,
                     spinup_period=None,
                     settings_filesuffix='',
-                    csv_filepath='runoff_output.csv',
-                    params_csv_filepath='params.csv',
+                    out_dir=None,
+                    csv_filepath=None,
+                    params_csv_filepath=None,
                     run_task=None,
                     mb_model_method=None,
                     save_output= True,
@@ -121,12 +122,11 @@ def run_with_runoff_for_sa(gdir, *,
     # If no WGMS data available create an empty frame with the right index
         mbdf = pd.DataFrame(index=years)
 
-    gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
-
+    gdir.settings['error_when_glacier_reaches_boundaries'] = False # In unrealistic runs, the glacier can reach the model boundaries. This is currently set to False to allow for these unrealistic runs, but in a more realistic setting, we would want to set this to True and remove any runs where the glacier reaches the boundaries.
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params
 
-    # TODO: Can use the other style of massbalance model? Perhaps change this?
+    # Calculate the mass balance model with the new mass balance parameters
     mb = mb_model_method(
         gdir,
         mb_model_class=MonthlyTIModel,
@@ -198,13 +198,13 @@ def run_with_runoff_for_sa(gdir, *,
     param_df = pd.DataFrame({"params": mb_params})
 
     if save_output:
-        df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + csv_filepath, index=False)
-        param_df.to_csv(cfg.PATHS['working_dir'] + '/' + str(row_index) + '_' + params_csv_filepath, index=False)
-    
+        df.to_csv(out_dir + '/' + str(row_index) + csv_filepath, index=False)
+        param_df.to_csv(out_dir + '/' + str(row_index) + params_csv_filepath, index=False)
+
     if progress_callback is not None:
         progress_callback_fn(row_index + 1)
 
-    return np.array(runoff)
+    return np.array(runoff) 
 
 #######################################################################
 # Function for Reducing Bounds - Check using Linear Regression Method
@@ -223,8 +223,8 @@ def parameter_bounding(
 ):
     """
     Selects parameter sets based on:
-    - Deviation from area (y_area close to 0)
-    - Hugonnet mass-balance uncertainty bounds (y_hugonnet within upper/lower error)
+    - Deviation from the RGI Area Observations at the year of the RGI Inventory, the year before and the year after. Considering an uncertainty bound (area_percentile)
+    - The Hugonnet mass-balance from the observed year range, considering the 1-sigma uncertainty bounds 
     """
 
     # Check flags 
@@ -338,12 +338,11 @@ def hydro_output_metric_calculator(runoff):
 #######################################################################
 def runoff_execution(
         fun_test, X, gdir,
-        years, glacier_index, init_model_yr, ys, min_ys,
-        ref_area_yr, spinup_period,
+        years, init_model_yr, ys, min_ys,
+        ref_area_yr, spinup_period, out_dir,
         csv_filepath, params_csv_filepath,
         run_task, mb_model_method):
 
-    import shutil
     all_experiments = []
 
     common = dict(
@@ -353,6 +352,7 @@ def runoff_execution(
         min_ys=min_ys,
         ref_area_yr=ref_area_yr,
         spinup_period=spinup_period,
+        out_dir=out_dir,
         csv_filepath=csv_filepath,
         params_csv_filepath=params_csv_filepath,
         run_task=run_task,

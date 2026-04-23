@@ -46,4 +46,4 @@ docs/.doctrees
 oggm/version.py
 oggm/ignore
 
-**/glacier_outs/
+**/glacier_outs*
