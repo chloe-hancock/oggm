@@ -9,7 +9,7 @@
 
 # === DEFINE PARAMETERS ===
 MULTI_PROCESS=True   
-N=10
+N=1000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 RGI_IDS='RGI60-14.00063'
@@ -63,7 +63,8 @@ python "$RUN_SCRIPT" \
 # Write out
 
 echo "Copying files..."
-rsync -avzh "$OGGM_OUTDIR/" glacier_outs
+mkdir -p glacier_outs
+rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS
 # rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output
 
 # Print a final message so you can actually see it being done in the output log.

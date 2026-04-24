@@ -5,11 +5,11 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node01
+#SBATCH --nodelist=node09
 
 # === DEFINE PARAMETERS ===
 RGI_IDS='RGI60-06.00001'
-N=5000
+N=1000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 

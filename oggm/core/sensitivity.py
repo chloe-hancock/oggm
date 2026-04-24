@@ -169,7 +169,6 @@ def run_with_runoff_for_sa(gdir, *,
 
     if y1 > y2:
         log.warning(f"No valid hydrological years for parameters {mb_params}")
-        return None
 
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
 

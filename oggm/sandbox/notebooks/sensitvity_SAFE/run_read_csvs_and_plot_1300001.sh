@@ -9,7 +9,7 @@
 
 # === DEFINE PARAMETERS ===
 RGI_IDS='RGI60-13.00001'
-N=5000
+N=5
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 
@@ -20,10 +20,6 @@ XMIN="1.5 0.1 -15.0"
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/oggm_20260323.sif"
 OGGM_WORKDIR="/home/users/chancock/glacier_outs/"$RGI_IDS
 RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/read_csvs_and_plot.py"
-
-OGGM_OUTDIR="/work/$SLURM_JOB_USER/$SLURM_JOB_ID/out"
-export OGGM_OUTDIR
-echo "Output dir for this run: $OGGM_OUTDIR"
 
 # Stop script on error
 set -e
@@ -46,10 +42,5 @@ python "$RUN_SCRIPT" \
     --params_csv_path $PARAMS_CSV_PATH \
     --x_max "$XMAX" \
     --x_min "$XMIN"
-
-# Write out
-echo "Copying files..."
-rsync -avzh "$OGGM_OUTDIR/" output
-# rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output
 
 echo "Job completed at $(date)"

@@ -1,8 +1,0 @@
-WORKING DIRECTORY /home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs
-done glacier:  0
-Saved sensitivity plots to /home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/PAWN_plots.png
-0 5000 5000 5000
-After area bounding: 137/5000 values remain (2.7%)
-After Hugonnet bounding: 40/5000 values remain (0.8% of original; 29.2% kept from previous step)
-There are 40 samples captured within the given bounds.
-Job completed at Tue Mar 31 04:19:51 PM CEST 2026

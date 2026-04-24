@@ -45,9 +45,6 @@ def get_args():
     parser.add_argument("--x_min", type=str, required=True,
                         help="Minimum values for each parameter (space-separated)")
 
-    parser.add_argument("--out_dir", type=str, required=True,
-                        help="Output directory for results")
-
 
     return parser.parse_args()
 
@@ -81,10 +78,7 @@ def main():
 
     hugonnet_dmdtda = selected_gdirs_geo_df['dmdtda'].values * 1000
 
-    print("Hugonnet", hugonnet_dmdtda)
     hugonnet_err_dmdtda = selected_gdirs_geo_df['err_dmdtda'].values * 1000
-
-    print("RGI_Date", gdirs[0].rgi_date)
 
     ##############################################################
     # Read CSVs
@@ -109,14 +103,14 @@ def main():
 
         for i in range(N):
             try:
-                df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + '_' + str(j) + args.output_csv_path)
+                df = pd.read_csv(cfg.PATHS['working_dir'] + '/'+ str(i) + args.output_csv_path)
                 mass_balance_samples.append(df['mass_balance'].values)
                 years.append(df['years'].values)
                 runoff_samples.append(df['runoff_Mt'].values)
                 area_samples.append(df['area_km2'].values)
                 volume_samples.append(df['volume_km3'].values)
 
-                mb_param_df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + '_' + str(j) + args.params_csv_path)
+                mb_param_df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path)
                 params.append(mb_param_df['params'])
                 N = len(params)
             except:
