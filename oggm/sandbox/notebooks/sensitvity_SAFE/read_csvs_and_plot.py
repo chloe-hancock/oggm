@@ -95,33 +95,69 @@ def main():
     for j in range(num_of_glaciers):
 
         mass_balance_samples = []
-        years = []
+        years_samples = []
         runoff_samples = []
         area_samples = []
         volume_samples = []
         params = []
+        statuses = []
+
+        # for i in range(N):
+        #     try:
+        #         area_samples.append(df['area_km2'].values)
+        #         print((cfg.PATHS['working_dir'] + '/'+ str(i) + args.output_csv_path))
+        #         df = pd.read_csv(cfg.PATHS['working_dir'] + '/'+ str(i) + args.output_csv_path)
+        #         mass_balance_samples.append(df['mass_balance'].values)
+        #         years.append(df['years'].values)
+        #         runoff_samples.append(df['runoff_Mt'].values)
+        #         volume_samples.append(df['volume_km3'].values)
+
+        #         mb_param_df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path)
+        #         params.append(mb_param_df['params'])
+        #         N = len(params)
+        #     except:
+        #         print(f"There is no simulation for the index {i}! Something has gone wrong here!")
 
         for i in range(N):
             try:
-                df = pd.read_csv(cfg.PATHS['working_dir'] + '/'+ str(i) + args.output_csv_path)
-                mass_balance_samples.append(df['mass_balance'].values)
-                years.append(df['years'].values)
-                runoff_samples.append(df['runoff_Mt'].values)
-                area_samples.append(df['area_km2'].values)
-                volume_samples.append(df['volume_km3'].values)
+                path = cfg.PATHS['working_dir'] + '/' + str(i) + args.output_csv_path
+                print(path)
 
-                mb_param_df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path)
-                params.append(mb_param_df['params'])
-                N = len(params)
-            except:
-                print(f"There is no simulation for the index {i}! Something has gone wrong here!")
+                df = pd.read_csv(path)
+
+                # Append arrays
+                area = df['area_km2'].values
+                area_samples.append(area)
+                runoff_samples.append(df['runoff_Mt'].values)
+                mass_balance_samples.append(df['mass_balance'].values)
+                volume_samples.append(df['volume_km3'].values)
+                years_samples.append(df['years'].values)
+
+                # Check for failure - if the area is zero for all years, this likely means the glacier has disappeared and the simulation has failed, so we can flag this in the statuses list and ignore these samples in the sensitivity analysis (or we could also choose to include them and see how they affect the sensitivity indices, but here we are just flagging them for now)
+                if area.max() == 0:
+                    statuses.append("failed")
+                else:
+                    statuses.append("ok")
+
+                mb_param_df = pd.read_csv(
+                    cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
+                )
+                params.append(mb_param_df['params'].values)
+
+            except FileNotFoundError:
+                print(f"No simulation for index {i}")
+                statuses.append("missing")
+
+            except Exception as e:
+                print(f"Simulation {i} failed unexpectedly:", e)
+                statuses.append("error")
 
         mass_balance_dict[j] = mass_balance_samples
-        years_dict[j] = years
+        years_dict[j] = years_samples
         runoff_dict[j] = runoff_samples
         area_dict[j] = area_samples
         volume_dict[j] = volume_samples
-        params_dict[j] = np.vstack([p.values for p in params])
+        params_dict[j] = np.vstack(params)
 
         print("done glacier: ", j)
 
@@ -135,7 +171,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years[i], mass_balance_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_samples[i], mass_balance_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Mass balance time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
         plt.xlabel('Year'), plt.ylabel('Mass Balance kg m$^-2$')
@@ -150,7 +186,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years[i], area_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_samples[i], area_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.scatter(gdirs[j].rgi_date, gdirs[j].rgi_area_km2, color='r', s=20, zorder=999)
         plt.title('Area time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
@@ -167,7 +203,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years[i], volume_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_samples[i], volume_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Volume time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
 
@@ -183,7 +219,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years[i], runoff_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_samples[i], runoff_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Runoff time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
 
@@ -263,11 +299,16 @@ def main():
         plt.subplot(num_of_glaciers,2,2*j+1), 
         plt.title('Distribution of Mean Mass Balance for RGI_ID = %s ' % rgi_id[j], loc='left')
 
-        plt.hist(mean_mass_balances_dict[j], bins='auto', range=(min_means, max_means), color='grey');
+        plt.hist(mean_mass_balances_dict[j], bins='auto', color='grey');
         plt.ylabel('Frequency of samples'), plt.xlabel('Mean')
 
-        plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Std of Mass Balance', loc='left'), plt.hist(std_mass_balances_dict[j], bins='auto', 
-                                                                                                 range=(min_stds, max_stds), color='grey');
+
+        # plt.hist(mean_mass_balances_dict[j], bins='auto', range=(min_means, max_means), color='grey');
+        # plt.ylabel('Frequency of samples'), plt.xlabel('Mean')
+
+        # plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Std of Mass Balance', loc='left'), plt.hist(std_mass_balances_dict[j], bins='auto', 
+        #                                                                                          range=(min_stds, max_stds), color='grey');
+        plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Std of Mass Balance', loc='left'), plt.hist(std_mass_balances_dict[j], bins='auto', color='grey');
         plt.ylabel('Frequency of samples'), plt.xlabel('Std')
 
         plt.tight_layout()
@@ -309,11 +350,13 @@ def main():
         bins_std_ro = np.linspace(min_std_ro, max_std_ro, nbins+1)
 
         plt.subplot(num_of_glaciers,2, 2*j+1), plt.title('Distribution of Runoff Mean', loc='left'), 
-        plt.hist(YY_dict[j][:,0], bins=bins_mean_ro, color='grey');
+        # plt.hist(YY_dict[j][:,0], bins=bins_mean_ro, color='grey');
+        plt.hist(YY_dict[j][:,0], color='grey');
         plt.ylabel('Frequency of samples'), plt.xlabel('Mean Runoff (Mt/y)')
 
         plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Runoff Std', loc='left'), 
-        plt.hist(YY_dict[j][:,1], bins=bins_std_ro, color='grey');
+        # plt.hist(YY_dict[j][:,1], bins=bins_std_ro, color='grey');
+        plt.hist(YY_dict[j][:,1], color='grey');
         plt.ylabel('Frequency of samples'), plt.xlabel('Std Runoff')
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "frequency_mean_vs_std_runoff.png")
@@ -335,9 +378,22 @@ def main():
 
         Y = YY_dict[k][:, i]
         X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
+        
+        # ----------------------------------------
+        # Filter failed / NaN runs for PAWN
+        # ----------------------------------------
+        mask = np.isfinite(Y)
 
-        # --- Compute PAWN indices ---
-        KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_dict[k], Y, n, Nboot=Nboot)
+        if mask.sum() < 2:
+            print(f"Not enough valid simulations for glacier {k}, skipping PAWN")
+        
+        Y_valid = Y[mask]
+        X_valid = params_dict[k][mask, :]
+
+        KS_median, KS_mean, KS_max = PAWN.pawn_indices(X_valid, Y_valid, n, Nboot=Nboot)
+
+        # # --- Compute PAWN indices ---
+        # KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_dict[k], Y, n, Nboot=Nboot)
 
         # Aggregate bootstrap samples
         KS_median_m, KS_median_lb, KS_median_ub = aggregate_boot(KS_median)

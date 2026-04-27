@@ -60,13 +60,11 @@ def main():
         # We pick the elevation-bands glaciers
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
         gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)
-
         # Get the Hugonnet mass balance and set up dataframe
         geo_df = utils.get_geodetic_mb_dataframe()
         geo_df.loc[rgi_ids]
 
         # Hydrological model workflow steps before running with hydro
-        cfg.PARAMS['evolution_model'] = 'FluxBased'
         cfg.PARAMS['store_model_geometry'] = True
         cfg.PARAMS['error_when_glacier_reaches_boundaries'] = False
 

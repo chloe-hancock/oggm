@@ -9,7 +9,7 @@
 
 # === DEFINE PARAMETERS ===
 RGI_IDS='RGI60-06.00001'
-N=1000
+N=100
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 
@@ -18,7 +18,7 @@ XMIN="1.5 0.1 -15.0"
 
 # === PATHS ===
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/oggm_20260323.sif"
-OGGM_WORKDIR="/home/users/chancock/glacier_outs/"$RGI_IDS
+OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/testing_0600001"
 RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/read_csvs_and_plot.py"
 
 # Stop script on error

@@ -14,6 +14,7 @@ from tqdm import tqdm
 import time
 import sys
 import os
+import warnings
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -288,8 +289,10 @@ def parameter_bounding(
 
     # 4. Apply mask 
     if mask.sum() == 0:
-        raise ValueError("No samples satisfy the selected bounds. "
-                         "Try relaxing percentile or Hugonnet range.")
+        warnings.warn("No samples satisfy the selected bounds. "
+                         "Try relaxing percentile or Hugonnet range.", UserWarning)
+        empty = np.empty((0, X.shape[1]))
+        return None, None, empty
 
     good_X = X[mask]
 
