@@ -453,7 +453,7 @@ def spinup_area_volume(gdir, *,
     # If no WGMS data available create an empty frame with the right index
         mbdf = pd.DataFrame(index=years)
 
-    gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
+    # gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
     
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params

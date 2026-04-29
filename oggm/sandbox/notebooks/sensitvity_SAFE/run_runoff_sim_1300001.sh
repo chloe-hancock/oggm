@@ -5,17 +5,20 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node09
+#SBATCH --nodelist=node07
 
 # === DEFINE PARAMETERS ===
 MULTI_PROCESS=True   
-N=10
+N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 RGI_IDS='RGI60-13.00001'
 
-XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
-XMAX="17.0 10.0 15.0" # Maximum values for each parameter
+# XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
+# XMAX="17.0 10.0 15.0" # Maximum values for each parameter
+
+XMAX="14.13561221  8.95813384 -2.69406789"
+XMIN="1.6068346   0.1570234  -6.43830081"
 
 # === PATHS ===
 # On every node, when slurm starts a job, it will make sure the directory
@@ -61,7 +64,7 @@ python "$RUN_SCRIPT" \
 
 echo "Copying files..."
 mkdir -p glacier_outs
-rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS
+rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS+"reduced"
 # rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output
 
 # Print a final message so you can actually see it being done in the output log.

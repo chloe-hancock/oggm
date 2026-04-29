@@ -63,6 +63,8 @@ def main():
     num_of_glaciers = 1
     N = args.N
 
+    print("Working Directory:", cfg.PATHS['working_dir'])
+
     rgi_dates = []
     rgi_area_km2s = []
 
@@ -102,22 +104,6 @@ def main():
         params = []
         statuses = []
 
-        # for i in range(N):
-        #     try:
-        #         area_samples.append(df['area_km2'].values)
-        #         print((cfg.PATHS['working_dir'] + '/'+ str(i) + args.output_csv_path))
-        #         df = pd.read_csv(cfg.PATHS['working_dir'] + '/'+ str(i) + args.output_csv_path)
-        #         mass_balance_samples.append(df['mass_balance'].values)
-        #         years.append(df['years'].values)
-        #         runoff_samples.append(df['runoff_Mt'].values)
-        #         volume_samples.append(df['volume_km3'].values)
-
-        #         mb_param_df = pd.read_csv(cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path)
-        #         params.append(mb_param_df['params'])
-        #         N = len(params)
-        #     except:
-        #         print(f"There is no simulation for the index {i}! Something has gone wrong here!")
-
         for i in range(N):
             try:
                 path = cfg.PATHS['working_dir'] + '/' + str(i) + args.output_csv_path
@@ -148,16 +134,15 @@ def main():
                 print(f"No simulation for index {i}")
                 statuses.append("missing")
 
-            except Exception as e:
-                print(f"Simulation {i} failed unexpectedly:", e)
-                statuses.append("error")
-
         mass_balance_dict[j] = mass_balance_samples
         years_dict[j] = years_samples
         runoff_dict[j] = runoff_samples
         area_dict[j] = area_samples
         volume_dict[j] = volume_samples
         params_dict[j] = np.vstack(params)
+
+        # TODO: Why does this happen?
+        N = len(mass_balance_samples) # Update N to the actual number of successful simulations
 
         print("done glacier: ", j)
 
@@ -171,7 +156,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_samples[i], mass_balance_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_dict[j][i], mass_balance_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Mass balance time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
         plt.xlabel('Year'), plt.ylabel('Mass Balance kg m$^-2$')
@@ -186,7 +171,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_samples[i], area_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_dict[j][i], area_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.scatter(gdirs[j].rgi_date, gdirs[j].rgi_area_km2, color='r', s=20, zorder=999)
         plt.title('Area time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
@@ -203,7 +188,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_samples[i], volume_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_dict[j][i], volume_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Volume time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
 
@@ -219,7 +204,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_samples[i], runoff_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_dict[j][i], runoff_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Runoff time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
 
