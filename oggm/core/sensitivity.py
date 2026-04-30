@@ -126,6 +126,11 @@ def run_with_runoff_for_sa(gdir, *,
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params
 
+    # TODO: How do I set these here?
+    
+    gdir.settings['melt_f'] = float(melt_f)
+    gdir.settings['prcp_fac'] = float(prcp_fac)
+    gdir.settings['temp_bias'] = float(temp_bias)
     # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
     # TODO, I need to run with smb? How can I run this here?
@@ -155,9 +160,12 @@ def run_with_runoff_for_sa(gdir, *,
     y1_index = np.where(ds.time.values == y1)[0][0]
     y2_index = np.where(ds.time.values == y2)[0][0]
 
-    smb = (ds.volume_m3.values[y1_index] - ds.volume_m3.values[y2_index]) / ds.area_m2.values[y1_index]
-    smb = smb * cfg.PARAMS['ice_density']  # in mm
+    print("ASCALAR DVIDID", ds.area_m2)
 
+    smb = (ds.volume_m3.values[y1_index] - ds.volume_m3.values[y2_index]) / ds.area_m2.values[y1_index]
+
+
+    smb = smb * cfg.PARAMS['ice_density']  # in mm
 
     if y1 > y2:
         log.warning(f"No valid hydrological years for parameters {mb_params}")
@@ -471,7 +479,7 @@ def spinup_area_volume(gdir, *,
         mb_model=mb, # The modified MB model
         store_monthly_hydro=True,
         output_filesuffix=file_id,
-        settings_filesuffix= settings_filesuffix # TODO: Check how to use this with the rest of the code?
+        settings_filesuffix= settings_filesuffix
     )
 
     with xr.open_dataset(gdir.get_filepath('model_diagnostics', filesuffix=file_id)) as ds:
