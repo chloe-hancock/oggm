@@ -141,10 +141,7 @@ def main():
         volume_dict[j] = volume_samples
         params_dict[j] = np.vstack(params)
 
-        # TODO: Why does this happen?
-        N = len(mass_balance_samples) # Update N to the actual number of successful simulations
-
-        print("done glacier: ", j)
+        print("done glacier: ", gdirs[j].rgi_id)
 
     ##############################################################
     # Plotting Simulation Outputs
@@ -589,6 +586,63 @@ def main():
     outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
+
+    # -----------------------------
+    # 3. 3D scatter plots
+    # -----------------------------
+    fig3d = plt.figure(figsize=(6, 4 * num_of_glaciers))
+    axs3d = []
+
+    for j in range(num_of_glaciers):
+        ax3d = fig3d.add_subplot(
+            num_of_glaciers, 1, j + 1, projection='3d'
+        )
+        axs3d.append(ax3d)
+
+        ax3d.scatter(
+            params_dict[j][:, 0],
+            params_dict[j][:, 1],
+            params_dict[j][:, 2],
+            s=10,
+            color='grey',
+            alpha=0.3
+        )
+
+        ax3d.scatter(
+            good_X_list[j][:, 0],
+            good_X_list[j][:, 1],
+            good_X_list[j][:, 2],
+            s=25,
+            color='red'
+        )
+
+        ax3d.set_xlabel('melt_f')
+        ax3d.set_ylabel('prcp_fac')
+        ax3d.set_zlabel('temp_bias')
+        ax3d.set_title(f'Glacier {j}')
+
+    # -----------------------------
+    # 4. Save rotated views (cluster-safe)
+    # -----------------------------
+    views = [(20, 30), (20, 120), (60, 30)]
+
+    for elev, azim in views:
+        for ax in axs3d:
+            ax.view_init(elev=elev, azim=azim)
+
+        plt.savefig(
+            os.path.join(
+                cfg.PATHS['working_dir'],
+                f"reduced_bounds_3D_e{elev}_a{azim}.png"
+            ),
+            dpi=200,
+            bbox_inches='tight'
+        )
+
+    plt.close(fig3d)
+
+
+
 ########################################################################################
 # Experimental plotting in between steps to see how the parameter bounding is working
 ########################################################################################
@@ -728,6 +782,33 @@ def main():
     outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds_hugonnet_only.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
+    ########################################################################################################
+    # ML: k-nearest neighbors to see how mixed "good" and "bad" samples are in the parameter 
+    # space, and whether we can use this to identify a reduced parameter space that is more likely
+    #  to contain good samples (i.e. samples that produce outputs within the observational bounds)
+    ########################################################################################################
+    from sklearn.neighbors import NearestNeighbors
+
+    X_all = params_dict[j]
+    X_good = good_X_list[j]
+
+    # Label points
+    y_all = np.zeros(len(X_all))
+    y_good = np.ones(len(X_good))
+
+    X = np.vstack([X_all, X_good])
+    y = np.hstack([y_all, y_good])
+
+    nbrs = NearestNeighbors(n_neighbors=20).fit(X)
+    distances, indices = nbrs.kneighbors(X_good)
+
+    # fraction of neighbours that are bad
+    bad_frac = []
+    for inds in indices:
+        bad_frac.append(np.mean(y[inds] == 0))
+
+    bad_frac = np.array(bad_frac)
+    print("Mixing Indicator:", bad_frac)
 
 if __name__ == "__main__":
         main()

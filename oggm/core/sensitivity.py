@@ -123,26 +123,12 @@ def run_with_runoff_for_sa(gdir, *,
     # If no WGMS data available create an empty frame with the right index
         mbdf = pd.DataFrame(index=years)
 
-    gdir.settings['error_when_glacier_reaches_boundaries'] = False # In unrealistic runs, the glacier can reach the model boundaries. This is currently set to False to allow for these unrealistic runs, but in a more realistic setting, we would want to set this to True and remove any runs where the glacier reaches the boundaries.
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params
 
-    # Calculate the mass balance model with the new mass balance parameters
-    mb = mb_model_method(
-        gdir,
-        mb_model_class=MonthlyTIModel,
-        melt_f=float(melt_f),
-        prcp_fac=float(prcp_fac),
-        temp_bias=float(temp_bias),
-        check_calib_params=False,
-        ) 
-
-    fls = gdir.read_pickle('inversion_flowlines') # Read flowlines
-    mbdf['mod_mb'] = mb.get_specific_mb(fls=fls, year=mbdf.index) # Compute modelled mass balance  
-
     # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
-
+    # TODO, I need to run with smb? How can I run this here?
     # Uses run with hydro to calculate hydrological output, so we can calculate the runoff
     run_with_hydro(
         gdir,
@@ -151,16 +137,14 @@ def run_with_runoff_for_sa(gdir, *,
         min_ys=min_ys, # For the run from climate data, to ensure we have data from 1979
         init_model_yr=init_model_yr,
         ref_area_yr=ref_area_yr,
-        mb_model=mb, # The modified MB model
         store_monthly_hydro=True,
         output_filesuffix=file_id,
-        settings_filesuffix= settings_filesuffix # TODO: Check how to use this with the rest of the code?
+        settings_filesuffix= settings_filesuffix
     )
 
     with xr.open_dataset(gdir.get_filepath('model_diagnostics', filesuffix=file_id)) as ds:
         # The last step of hydrological output is NaN (we can't compute it for this year)
         ds = ds.isel(time=slice(0, -1)).load()
-
 
     # These summed variabels give the total runoff from the glacier
     runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
@@ -168,17 +152,19 @@ def run_with_runoff_for_sa(gdir, *,
     y1 = years[0] + spinup_period
     y2 = years[-1]
 
+    y1_index = np.where(ds.time.values == y1)[0][0]
+    y2_index = np.where(ds.time.values == y2)[0][0]
+
+    smb = (ds.volume_m3.values[y1_index] - ds.volume_m3.values[y2_index]) / ds.area_m2.values[y1_index]
+    smb = smb * cfg.PARAMS['ice_density']  # in mm
+
+
     if y1 > y2:
         log.warning(f"No valid hydrological years for parameters {mb_params}")
 
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
 
     df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
-
-    # Convert MB index to integer-year
-    mbdf_annual = mbdf.loc[y1:y2].copy()
-    mbdf_annual.index = mbdf_annual.index.astype(int)
-    df_mb = mbdf_annual['mod_mb'].values
 
     # Extract the relevant runoff variables
     df_annual = ds[runoff_vars].to_dataframe()
@@ -191,7 +177,7 @@ def run_with_runoff_for_sa(gdir, *,
     df = pd.DataFrame({
             'years': list(range(y1,y2+1)),
             'runoff_Mt': runoff,
-            'mass_balance': df_mb,
+            'mass_balance': smb,
             'area_km2': df_area,
             'volume_km3': df_volume})
 

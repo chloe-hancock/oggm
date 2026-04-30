@@ -9,7 +9,7 @@
 
 # === DEFINE PARAMETERS ===
 MULTI_PROCESS=True   
-N=5000
+N=50
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 RGI_IDS='RGI60-06.00001'

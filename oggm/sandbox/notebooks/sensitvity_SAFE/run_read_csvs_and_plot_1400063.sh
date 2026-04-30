@@ -13,15 +13,15 @@ N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 
-XMAX="16.49535723 8.99451988 -1.50927903"
-XMIN="1.6584096 0.1025126 -9.80532734"
+# XMAX="16.49535723 8.99451988 -1.50927903"
+# XMIN="1.6584096 0.1025126 -9.80532734"
 
-# XMAX="17.0 10.0 15.0"
-# XMIN="1.5 0.1 -15.0"
+XMAX="17.0 10.0 15.0"
+XMIN="1.5 0.1 -15.0"
 
 # === PATHS ===
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/oggm_20260323.sif"
-OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/"$RGI_IDS"_reduced"
+OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/"$RGI_IDS
 RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/read_csvs_and_plot.py"
 
 # Stop script on error

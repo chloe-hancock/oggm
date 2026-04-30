@@ -14,11 +14,11 @@ OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 RGI_IDS='RGI60-14.00063'
 
-# XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
-# XMAX="17.0 10.0 15.0" # Maximum values for each parameter
+XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
+XMAX="17.0 10.0 15.0" # Maximum values for each parameter
 
-XMAX="16.49535723 8.99451988 -1.50927903"
-XMIN="1.6584096 0.1025126 -9.80532734"
+# XMAX="16.49535723 8.99451988 -1.50927903"
+# XMIN="1.6584096 0.1025126 -9.80532734"
 
 # === PATHS ===
 # On every node, when slurm starts a job, it will make sure the directory
@@ -64,7 +64,7 @@ python "$RUN_SCRIPT" \
 
 echo "Copying files..."
 mkdir -p glacier_outs
-rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS"_reduced"
+rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS
 # rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output
 
 # Print a final message so you can actually see it being done in the output log.
