@@ -117,20 +117,30 @@ def run_with_runoff_for_sa(gdir, *,
     save_output: bool
         Whether to save the output to a CSV file or not. Default is True.
     """
+
+    melt_f, prcp_fac, temp_bias = mb_params
+
+    param_df = pd.DataFrame({"params": mb_params})
+
+    if save_output:
+        param_df.to_csv(out_dir + '/' + str(row_index) + params_csv_filepath, index=False)
+
     try:
         mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
     except (RuntimeError):
     # If no WGMS data available create an empty frame with the right index
         mbdf = pd.DataFrame(index=years)
 
-    # Set the parameter values
-    melt_f, prcp_fac, temp_bias = mb_params
+    # Calculate the mass balance model with the new mass balance parameters
+    mb = mb_model_method(
+        gdir,
+        mb_model_class=MonthlyTIModel,
+        melt_f=float(melt_f),
+        prcp_fac=float(prcp_fac),
+        temp_bias=float(temp_bias),
+        check_calib_params=False,
+        ) 
 
-    # TODO: How do I set these here?
-    
-    gdir.settings['melt_f'] = float(melt_f)
-    gdir.settings['prcp_fac'] = float(prcp_fac)
-    gdir.settings['temp_bias'] = float(temp_bias)
     # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
     # TODO, I need to run with smb? How can I run this here?
@@ -153,7 +163,7 @@ def run_with_runoff_for_sa(gdir, *,
 
     # These summed variabels give the total runoff from the glacier
     runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
-
+    # TODO: Update the years that we are looking at here, we do not have to cut this down. We can do this later if we need.
     y1 = years[0] + spinup_period
     y2 = years[-1]
 
@@ -174,6 +184,15 @@ def run_with_runoff_for_sa(gdir, *,
 
     df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
 
+    # if np.all((df_area[0:] != 0) & np.isfinite(df_area[0:])):
+    #     smb = (df_volume[0:] - df_volume[:-1]) / df_area[0:] # TODO: Check we might need to divide this by something... Check the units and the logic here??
+    # else:
+    #     smb = np.full(len(df_area[0:]), np.nan)
+
+    smb = (df_volume[1:] - df_volume[:-1]) # TODO: Check we might need to divide this by something... Check the units and the logic here??
+
+    print("SMB: ", smb)
+
     # Extract the relevant runoff variables
     df_annual = ds[runoff_vars].to_dataframe()
 
@@ -188,12 +207,9 @@ def run_with_runoff_for_sa(gdir, *,
             'mass_balance': smb,
             'area_km2': df_area,
             'volume_km3': df_volume})
-
-    param_df = pd.DataFrame({"params": mb_params})
-
+    
     if save_output:
         df.to_csv(out_dir + '/' + str(row_index) + csv_filepath, index=False)
-        param_df.to_csv(out_dir + '/' + str(row_index) + params_csv_filepath, index=False)
 
     if progress_callback is not None:
         progress_callback_fn(row_index + 1)
@@ -441,14 +457,7 @@ def spinup_area_volume(gdir, *,
     save_output: bool
         Whether to save the output to a CSV file or not. Default is True.
     """
-    try:
-        mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
-    except (RuntimeError):
-    # If no WGMS data available create an empty frame with the right index
-        mbdf = pd.DataFrame(index=years)
 
-    # gdir.settings['error_when_glacier_reaches_boundaries'] = False # TODO- When more realistic, I assume we will not need this?
-    
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params
 
@@ -461,9 +470,6 @@ def spinup_area_volume(gdir, *,
         temp_bias=float(temp_bias),
         check_calib_params=False,
         ) 
-    
-    fls = gdir.read_pickle('inversion_flowlines') # Read flowlines
-    mbdf['mod_mb'] = mb.get_specific_mb(fls=fls, year=mbdf.index) # Compute modelled mass balance  
 
     # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'

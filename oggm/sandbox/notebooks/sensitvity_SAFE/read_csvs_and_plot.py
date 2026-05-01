@@ -78,9 +78,11 @@ def main():
     mask = geo_df['period'].eq('2000-01-01_2020-01-01')
     selected_gdirs_geo_df = geo_df.loc[geo_df.index.isin([str(rgi_id[0])]) & mask]
 
-    hugonnet_dmdtda = selected_gdirs_geo_df['dmdtda'].values * 1000
+    hugonnet_dmdtda = selected_gdirs_geo_df['dmdtda'].values * 1000 * 20 * rgi_area_km2s
 
-    hugonnet_err_dmdtda = selected_gdirs_geo_df['err_dmdtda'].values * 1000
+    hugonnet_err_dmdtda = selected_gdirs_geo_df['err_dmdtda'].values * 1000 * 20 * rgi_area_km2s
+
+    print("Hugonnet dmdtda (mm/yr): ", hugonnet_dmdtda, hugonnet_err_dmdtda)
 
     ##############################################################
     # Read CSVs
@@ -153,7 +155,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_dict[j][i], mass_balance_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_samples[j][i], mass_balance_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Mass balance time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
         plt.xlabel('Year'), plt.ylabel('Mass Balance kg m$^-2$')
@@ -168,7 +170,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_dict[j][i], area_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_samples[j][i], area_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.scatter(gdirs[j].rgi_date, gdirs[j].rgi_area_km2, color='r', s=20, zorder=999)
         plt.title('Area time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
@@ -185,7 +187,7 @@ def main():
     for j in range(num_of_glaciers):
         for i in range(N):
             plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_dict[j][i], volume_dict[j][i], label='sim', color='k', linewidth=0.5)
+            plt.plot(years_samples[j][i], volume_dict[j][i], label='sim', color='k', linewidth=0.5)
 
         plt.title('Volume time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id[j]))
 

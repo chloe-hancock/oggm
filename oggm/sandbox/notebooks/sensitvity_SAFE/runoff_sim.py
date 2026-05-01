@@ -49,7 +49,7 @@ def get_args():
 def main():
 
         args = get_args()
-        cfg.initialize(logging_level="CRITICAL")
+        cfg.initialize()
         cfg.PATHS['working_dir'] = args.work_dir
         cfg.PARAMS['store_model_geometry'] = True
         cfg.PARAMS['min_ice_thick_for_length'] = 1
@@ -65,8 +65,6 @@ def main():
         geo_df.loc[rgi_ids]
 
         # Hydrological model workflow steps before running with hydro
-        cfg.PARAMS['store_model_geometry'] = True
-        # cfg.PARAMS['error_when_glacier_reaches_boundaries'] = False
 
         num_of_glaciers = len(gdirs)
 
