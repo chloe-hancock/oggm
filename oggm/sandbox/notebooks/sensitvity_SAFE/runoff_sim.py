@@ -23,7 +23,7 @@ def get_args():
     parser.add_argument("--work_dir", type=str, required=True,
                         help="Path to OGGM working directory")
 
-    parser.add_argument("--rgi_ids", type=str, required=True,
+    parser.add_argument("--rgi_ids", nargs='+', required=True,
                         help="RGI IDs to process (space-separated or single string)")
 
     parser.add_argument("--N", type=int, required=True,

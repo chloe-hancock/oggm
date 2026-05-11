@@ -8,7 +8,7 @@
 #SBATCH --nodelist=node09
 
 # === DEFINE PARAMETERS ===
-RGI_IDS='RGI60-06.00001'
+RGI_IDS=RGI60-06.00001
 N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'

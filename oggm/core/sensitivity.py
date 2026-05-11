@@ -119,17 +119,11 @@ def run_with_runoff_for_sa(gdir, *,
     """
 
     melt_f, prcp_fac, temp_bias = mb_params
-
     param_df = pd.DataFrame({"params": mb_params})
 
     if save_output:
         param_df.to_csv(out_dir + '/' + str(row_index) + params_csv_filepath, index=False)
 
-    try:
-        mbdf = gdir.get_ref_mb_data().loc[years] # WGMS data for the glacier
-    except (RuntimeError):
-    # If no WGMS data available create an empty frame with the right index
-        mbdf = pd.DataFrame(index=years)
 
     # Calculate the mass balance model with the new mass balance parameters
     mb = mb_model_method(
@@ -152,6 +146,7 @@ def run_with_runoff_for_sa(gdir, *,
         min_ys=min_ys, # For the run from climate data, to ensure we have data from 1979
         init_model_yr=init_model_yr,
         ref_area_yr=ref_area_yr,
+        mb_model=mb, # The modified MB model
         store_monthly_hydro=True,
         output_filesuffix=file_id,
         settings_filesuffix= settings_filesuffix
@@ -170,10 +165,7 @@ def run_with_runoff_for_sa(gdir, *,
     y1_index = np.where(ds.time.values == y1)[0][0]
     y2_index = np.where(ds.time.values == y2)[0][0]
 
-    print("ASCALAR DVIDID", ds.area_m2)
-
     smb = (ds.volume_m3.values[y1_index] - ds.volume_m3.values[y2_index]) / ds.area_m2.values[y1_index]
-
 
     smb = smb * cfg.PARAMS['ice_density']  # in mm
 
@@ -181,17 +173,12 @@ def run_with_runoff_for_sa(gdir, *,
         log.warning(f"No valid hydrological years for parameters {mb_params}")
 
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
-
     df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
 
-    # if np.all((df_area[0:] != 0) & np.isfinite(df_area[0:])):
-    #     smb = (df_volume[0:] - df_volume[:-1]) / df_area[0:] # TODO: Check we might need to divide this by something... Check the units and the logic here??
-    # else:
-    #     smb = np.full(len(df_area[0:]), np.nan)
+    # smb = (df_volume[0:] - df_volume[:-1]) * 1e9 # TODO: Check we might need to divide this by something... Check the units and the logic here??
 
-    smb = (df_volume[1:] - df_volume[:-1]) # TODO: Check we might need to divide this by something... Check the units and the logic here??
-
-    print("SMB: ", smb)
+    smb = np.full_like(df_volume, np.nan)
+    smb[1:] = (df_volume[1:] - df_volume[:-1]) * 1e9
 
     # Extract the relevant runoff variables
     df_annual = ds[runoff_vars].to_dataframe()
