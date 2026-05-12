@@ -49,7 +49,7 @@ def get_args():
 def main():
 
         args = get_args()
-        cfg.initialize()
+        cfg.initialize(logging_level="CRITICAL") # To suppress OGGM logging output during the sensitivity analysis runs
         cfg.PATHS['working_dir'] = args.work_dir
         cfg.PARAMS['store_model_geometry'] = True
         cfg.PARAMS['min_ice_thick_for_length'] = 1

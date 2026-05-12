@@ -79,9 +79,9 @@ def main():
     mask = geo_df['period'].eq('2000-01-01_2020-01-01')
     selected_gdirs_geo_df = geo_df.loc[geo_df.index.isin([str(rgi_ids[0])]) & mask]
 
-    hugonnet_dmdtda = selected_gdirs_geo_df['dmdtda'].values * 1000 * 20 * rgi_area_km2s
+    hugonnet_dmdt = selected_gdirs_geo_df['dmdtda'].values * rgi_area_km2s
 
-    hugonnet_err_dmdtda = selected_gdirs_geo_df['err_dmdtda'].values * 1000 * 20 * rgi_area_km2s
+    hugonnet_err_dmdt = selected_gdirs_geo_df['err_dmdtda'].values * rgi_area_km2s
     
     ##############################################################
     # Now call all of our functions!
@@ -102,7 +102,7 @@ def main():
     plot_runoff_mean_and_std_distributions(YY_dict, num_of_glaciers)
     runoff_pawn_plot_all(params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=500, k=0)
 
-    plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_dmdtda, hugonnet_err_dmdtda, rgi_area_km2s, rgi_dates, years_dict, num_of_glaciers, N)
+    plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2s, rgi_dates, years_dict, num_of_glaciers, N)
 
 
 ##############################################################
@@ -377,15 +377,20 @@ def runoff_pawn_plot_all(params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=
 ##############################################################
 # Constraining the parameters - initial investigation
 ##############################################################
-def plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_dmdtda, hugonnet_err_dmdtda, rgi_area_km2s, rgi_dates, years_dict, num_of_glaciers, N):
+def plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2s, rgi_dates, years_dict, num_of_glaciers, N):
     mass_balance_dict_in_period = {}
     for j in range(num_of_glaciers):
         yrs_idx = np.where((years_dict[j][0] >= 2000) & (years_dict[j][0] <= 2019))[0].tolist()
         mb_values = []
         for i in range(N):
             mbs = mass_balance_dict[j][i][yrs_idx]
-            mb_values.append(mbs.mean())
+            
+            dmdt_ice = mbs.sum() / len(yrs_idx) # kg ice yr-1
+            dmdt_we  = dmdt_ice * (1000.0 / cfg.PARAMS['ice_density'])
+            mb_values.append(dmdt_we)
+
             mass_balance_dict_in_period[j] = mb_values
+        
         fig, axs = plt.subplots(
             num_of_glaciers, 1,
             figsize=(8, 4*num_of_glaciers),
@@ -393,14 +398,15 @@ def plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_
     )
     for j in range(num_of_glaciers):
         ax = axs[j, 0]
-        upper_bound = hugonnet_dmdtda[j] + hugonnet_err_dmdtda[j]
-        lower_bound = hugonnet_dmdtda[j] - hugonnet_err_dmdtda[j]
+        upper_bound = hugonnet_dmdt[j] + hugonnet_err_dmdt[j]
+        lower_bound = hugonnet_dmdt[j] - hugonnet_err_dmdt[j]
+        
         # PLOT INTO THE AXES
         ax.hist(mass_balance_dict_in_period[j], bins=30, color='grey', edgecolor='white')
         # Shade region |mean| < threshold
         ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Specific Mass Balance within Hugonnet Error Bounds')
         # vertical lines
-        ax.axvline(hugonnet_dmdtda[j], color='teal')
+        ax.axvline(hugonnet_dmdt[j], color='teal')
         ax.axvline(lower_bound, color='teal', linestyle='--')
         ax.axvline(upper_bound, color='teal', linestyle='--')
         # labels + title
@@ -408,9 +414,11 @@ def plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_
         ax.set_ylabel("Frequency")
         ax.set_title(f"Glacier {j}: Distribution of Specific Mass Balance in years 2000-2020")
         ax.legend()
+    
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "specific_mb_dist.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    
     area_at_rgi_yr_dict = {}
     area_before_rgi_yr_dict = {}
     area_after_rgi_yr_dict = {}
@@ -461,8 +469,8 @@ def plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_
         new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_dict[j], 
                                                                 area_dict[j], 
                                                                 mass_balance_dict_in_period[j],
-                                                                hugonnet=hugonnet_dmdtda[j],
-                                                                hugonnet_error=hugonnet_err_dmdtda[j],
+                                                                hugonnet=hugonnet_dmdt[j],
+                                                                hugonnet_error=hugonnet_err_dmdt[j],
                                                                 obs_area=rgi_area_km2s[j],
                                                                 year_idx=yrs_idx[j],
                                                                 area_percentile=10,
@@ -575,7 +583,7 @@ def plot_parameter_bounding_3d(params_dict, good_X_list, num_of_glaciers):
 #         new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_dict[j], 
 #                                                                 area_dict[j], 
 #                                                                 mass_balance_dict_in_period[j],
-#                                                                 hugonnet=hugonnet_dmdtda[j],
+#                                                                 hugonnet=hugonnet_dmdt[j],
 #                                                                 hugonnet_error=hugonnet_err_dmdtda[j],
 #                                                                 obs_area=rgi_area_km2s[j],
 #                                                                 year_idx=yrs_idx[j],
@@ -642,8 +650,8 @@ def plot_parameter_bounding_3d(params_dict, good_X_list, num_of_glaciers):
 #         new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_dict[j], 
 #                                                                 area_dict[j], 
 #                                                                 mass_balance_dict_in_period[j],
-#                                                                 hugonnet=hugonnet_dmdtda[j],
-#                                                                 hugonnet_error=hugonnet_err_dmdtda[j],
+#                                                                 hugonnet=hugonnet_dmdt[j],
+#                                                                 hugonnet_error=hugonnet_err_dmdt[j],
 #                                                                 obs_area=rgi_area_km2s[j],
 #                                                                 year_idx=yrs_idx[j],
 #                                                                 area_percentile=10,

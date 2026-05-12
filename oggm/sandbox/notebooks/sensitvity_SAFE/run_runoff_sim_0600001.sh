@@ -14,8 +14,11 @@ OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 RGI_IDS=RGI60-06.00001
 
-XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
-XMAX="17.0 10.0 15.0" # Maximum values for each parameter
+# XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
+# XMAX="17.0 10.0 15.0" # Maximum values for each parameter
+
+XMAX="3.27491219  0.86718002 -2.88411379"
+XMIN="2.27491219 -0.13281998 -3.88411379"
 
 # XMAX="2.55278266  0.81903717 -0.78842941"
 # XMIN="1.64705155  0.58564001 -2.29988439"
@@ -64,7 +67,7 @@ python "$RUN_SCRIPT" \
 
 echo "Copying files..."
 mkdir -p glacier_outs
-rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS"_boundaries_test"
+rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS"_boundaries_test_reduced"
 # rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output
 
 # Print a final message so you can actually see it being done in the output log.

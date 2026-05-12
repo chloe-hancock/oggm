@@ -162,13 +162,6 @@ def run_with_runoff_for_sa(gdir, *,
     y1 = years[0] + spinup_period
     y2 = years[-1]
 
-    y1_index = np.where(ds.time.values == y1)[0][0]
-    y2_index = np.where(ds.time.values == y2)[0][0]
-
-    smb = (ds.volume_m3.values[y1_index] - ds.volume_m3.values[y2_index]) / ds.area_m2.values[y1_index]
-
-    smb = smb * cfg.PARAMS['ice_density']  # in mm
-
     if y1 > y2:
         log.warning(f"No valid hydrological years for parameters {mb_params}")
 
@@ -178,7 +171,7 @@ def run_with_runoff_for_sa(gdir, *,
     # smb = (df_volume[0:] - df_volume[:-1]) * 1e9 # TODO: Check we might need to divide this by something... Check the units and the logic here??
 
     smb = np.full_like(df_volume, np.nan)
-    smb[1:] = (df_volume[1:] - df_volume[:-1]) * 1e9
+    smb[1:] = (df_volume[1:] - df_volume[:-1]) * cfg.PARAMS['ice_density']
 
     # Extract the relevant runoff variables
     df_annual = ds[runoff_vars].to_dataframe()
@@ -241,6 +234,9 @@ def parameter_bounding(
     y_area = np.asarray(y_area)
     y_mass_balance = np.asarray(y_mass_balance)
 
+    print("MASS BALANCE: ", y_mass_balance)
+    print("HUGONNET ERRORS: ", lower_error, upper_error)
+
     # Areas at the RGI year, before and after
     area_at_rgi_yr = []
     area_before_rgi_yr = []
@@ -290,7 +286,15 @@ def parameter_bounding(
                          "Try relaxing percentile or Hugonnet range.", UserWarning)
         empty = np.empty((0, X.shape[1]))
         return None, None, empty
-
+    if mask.sum() == 1:
+        warnings.warn("Only one sample satisfies the selected bounds. "
+                         "Try relaxing percentile or Hugonnet range.", UserWarning)
+        
+        lb = X[mask][0] - 0.5
+        ub = X[mask][0] + 0.5
+        good_X = X[mask]
+        return lb, ub, good_X
+    
     good_X = X[mask]
 
     print("There are " + str(len(good_X)) + " samples captured within the given bounds.")
