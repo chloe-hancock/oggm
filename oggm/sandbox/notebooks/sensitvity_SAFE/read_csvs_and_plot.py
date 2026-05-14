@@ -135,7 +135,7 @@ def read_csvs(args, num_of_glaciers, gdirs, N):
                 mass_balance_samples.append(df['mass_balance'].values[1:])
                 volume_samples.append(df['volume_km3'].values[1:])
                 years_samples.append(df['years'].values[1:])
-                # Check for failure - if the area is zero for all years, this likely means the glacier has disappeared and the simulation has failed, so we can flag this in the statuses list and ignore these samples in the sensitivity analysis (or we could also choose to include them and see how they affect the sensitivity indices, but here we are just flagging them for now)
+                # Check for failure: if the area is zero for all years, this likely means the glacier has disappeared and the simulation has failed
                 if np.array(area_samples).max() == 0:
                     statuses.append("failed")
                 else:
@@ -143,7 +143,7 @@ def read_csvs(args, num_of_glaciers, gdirs, N):
                 mb_param_df = pd.read_csv(
                     cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
                 )
-                params.append(mb_param_df['params'].values)
+                params.append(mb_param_df['params'].to_numpy().ravel())
             except FileNotFoundError:
                 print(f"No simulation for index {i}")
                 statuses.append("missing")
@@ -221,6 +221,7 @@ def plot_runoff_timeseries(runoff_dict, years_dict, rgi_ids, num_of_glaciers, N)
 # Plotting distribution of Inputs
 ##############################################################
 def plot_input_hists(params_dict, args):
+
     x_max = [float(v) for v in args.x_max.split()]
     x_min = [float(v) for v in args.x_min.split()]
     melt_low, melt_high = x_min[0], x_max[0]
@@ -380,11 +381,12 @@ def runoff_pawn_plot_all(params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=
 def plot_parameter_bounding(params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2s, rgi_dates, years_dict, num_of_glaciers, N):
     mass_balance_dict_in_period = {}
     for j in range(num_of_glaciers):
-        yrs_idx = np.where((years_dict[j][0] >= 2000) & (years_dict[j][0] <= 2019))[0].tolist()
+        yrs_idx = np.where((years_dict[j][0] >= 2000) & (years_dict[j][0] <= 2020))[0].tolist()
+        print("years_idx", yrs_idx)
         mb_values = []
         for i in range(N):
             mbs = mass_balance_dict[j][i][yrs_idx]
-            
+            print("mass balances", mbs)
             dmdt_ice = mbs.sum() / len(yrs_idx) # kg ice yr-1
             dmdt_we  = dmdt_ice * (1000.0 / cfg.PARAMS['ice_density'])
             mb_values.append(dmdt_we)
@@ -560,175 +562,6 @@ def plot_parameter_bounding_3d(params_dict, good_X_list, num_of_glaciers):
             bbox_inches='tight'
         )
     plt.close(fig3d)
-
-
-
-# ########################################################################################
-# # Experimental plotting in between steps to see how the parameter bounding is working
-# ########################################################################################
-
-
-# ########################################################################################
-# # AREA
-# ########################################################################################
-
-#     # Now constraining the parameters 
-
-#     new_lower_bounds_list = []
-#     new_upper_bounds_list = []
-#     good_X_list = []
-
-
-#     for j in range(num_of_glaciers):
-#         new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_dict[j], 
-#                                                                 area_dict[j], 
-#                                                                 mass_balance_dict_in_period[j],
-#                                                                 hugonnet=hugonnet_dmdt[j],
-#                                                                 hugonnet_error=hugonnet_err_dmdtda[j],
-#                                                                 obs_area=rgi_area_km2s[j],
-#                                                                 year_idx=yrs_idx[j],
-#                                                                 area_percentile=10,
-#                                                                 area_bounding_flag=True,
-#                                                                 hugonnet_bounding_flag=False)
-#         new_lower_bounds_list.append(new_lower_bounds)
-#         new_upper_bounds_list.append(new_upper_bounds)
-#         good_X_list.append(good_X)
-
-#         print("The new upper bounds for glacier %d are: %s" % (j, new_upper_bounds))
-#         print("The new lower bounds for glacier %d are: %s" % (j, new_lower_bounds))
-
-#     X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
-#     M = len(X_labels)
-
-#     fig, axs = plt.subplots(
-#         num_of_glaciers, M,
-#         figsize=(15, 4*num_of_glaciers),
-#         squeeze=False
-#     )
-
-#     for j in range(num_of_glaciers):
-#         # loop over parameters and plot scatter
-#         for i in range(M):
-#             ax = axs[j, i]
-
-#             ax.scatter(
-#                 params_dict[j][:, i],
-#                 params_dict[j][:, (i+1) % M],
-#                 s=20,
-#                 edgecolors='none',
-#                 color='grey',
-#                 alpha=0.5
-#             )
-
-#             ax.scatter(
-#                 good_X_list[j][:, i],
-#                 good_X_list[j][:, (i+1) % M],
-#                 s=20,
-#                 edgecolors='none',
-#                 color='red'
-#             )
-
-#             ax.set_xlabel(X_labels[i])
-#             ax.set_ylabel(X_labels[(i+1) % M])
-
-#     plt.tight_layout()
-#     outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds_area_only.png")
-#     plt.savefig(outpath, dpi=200, bbox_inches='tight')
-
-# ########################################################################################
-# # HUGGONET
-# ########################################################################################
-
-#     # Now constraining the parameters 
-
-#     new_lower_bounds_list = []
-#     new_upper_bounds_list = []
-#     good_X_list = []
-
-
-#     for j in range(num_of_glaciers):
-#         new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_dict[j], 
-#                                                                 area_dict[j], 
-#                                                                 mass_balance_dict_in_period[j],
-#                                                                 hugonnet=hugonnet_dmdt[j],
-#                                                                 hugonnet_error=hugonnet_err_dmdt[j],
-#                                                                 obs_area=rgi_area_km2s[j],
-#                                                                 year_idx=yrs_idx[j],
-#                                                                 area_percentile=10,
-#                                                                 area_bounding_flag=False,
-#                                                                 hugonnet_bounding_flag=True)
-#         new_lower_bounds_list.append(new_lower_bounds)
-#         new_upper_bounds_list.append(new_upper_bounds)
-#         good_X_list.append(good_X)
-
-#         print("The new upper bounds for glacier %d are: %s" % (j, new_upper_bounds))
-#         print("The new lower bounds for glacier %d are: %s" % (j, new_lower_bounds))
-
-#     X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
-#     M = len(X_labels)
-
-#     fig, axs = plt.subplots(
-#         num_of_glaciers, M,
-#         figsize=(15, 4*num_of_glaciers),
-#         squeeze=False
-#     )
-
-#     for j in range(num_of_glaciers):
-#         # loop over parameters and plot scatter
-#         for i in range(M):
-#             ax = axs[j, i]
-
-#             ax.scatter(
-#                 params_dict[j][:, i],
-#                 params_dict[j][:, (i+1) % M],
-#                 s=20,
-#                 edgecolors='none',
-#                 color='grey',
-#                 alpha=0.5
-#             )
-
-#             ax.scatter(
-#                 good_X_list[j][:, i],
-#                 good_X_list[j][:, (i+1) % M],
-#                 s=20,
-#                 edgecolors='none',
-#                 color='red'
-#             )
-
-#             ax.set_xlabel(X_labels[i])
-#             ax.set_ylabel(X_labels[(i+1) % M])
-
-#     plt.tight_layout()
-#     outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds_hugonnet_only.png")
-#     plt.savefig(outpath, dpi=200, bbox_inches='tight')
-
-#     ########################################################################################################
-#     # ML: k-nearest neighbors to see how mixed "good" and "bad" samples are in the parameter 
-#     # space, and whether we can use this to identify a reduced parameter space that is more likely
-#     #  to contain good samples (i.e. samples that produce outputs within the observational bounds)
-#     ########################################################################################################
-#     from sklearn.neighbors import NearestNeighbors
-
-#     X_all = params_dict[j]
-#     X_good = good_X_list[j]
-
-#     # Label points
-#     y_all = np.zeros(len(X_all))
-#     y_good = np.ones(len(X_good))
-
-#     X = np.vstack([X_all, X_good])
-#     y = np.hstack([y_all, y_good])
-
-#     nbrs = NearestNeighbors(n_neighbors=20).fit(X)
-#     distances, indices = nbrs.kneighbors(X_good)
-
-#     # fraction of neighbours that are bad
-#     bad_frac = []
-#     for inds in indices:
-#         bad_frac.append(np.mean(y[inds] == 0))
-
-#     bad_frac = np.array(bad_frac)
-#     print("Mixing Indicator:", bad_frac)
 
 if __name__ == "__main__":
         main()

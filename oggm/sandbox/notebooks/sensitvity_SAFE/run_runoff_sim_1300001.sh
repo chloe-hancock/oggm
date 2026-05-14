@@ -43,7 +43,7 @@ set -e
 #######################################
 # 1. Activate Conda
 #######################################
-source /home/local/sw/miniconda/3.9/etc/profile.d/conda.sh
+source /home/local/sw/miniconda/3.14/etc/profile.d/conda.sh
 conda activate oggm_env
 
 # Ensure Python prints immediately

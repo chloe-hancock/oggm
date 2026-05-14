@@ -49,7 +49,7 @@ def get_args():
 def main():
 
         args = get_args()
-        cfg.initialize(logging_level="CRITICAL") # To suppress OGGM logging output during the sensitivity analysis runs
+        cfg.initialize()
         cfg.PATHS['working_dir'] = args.work_dir
         cfg.PARAMS['store_model_geometry'] = True
         cfg.PARAMS['min_ice_thick_for_length'] = 1
@@ -107,7 +107,7 @@ def main():
                 YY = runoff_execution(fun_test = run_with_runoff_for_sa,
                                          X = X, # All samples
                                          gdir = gdirs[i], # Hinteresfirner Glacier directory
-                                         years =range(1901, 2020), # years
+                                         years =range(1901, 2021), # years
                                          init_model_yr = 1901, # Simulation start year - needs to be early enough to allow for spinup before the period we are interested in
                                          ys =1901, # Start of the simulation
                                          min_ys = 1901, # Minimum start year

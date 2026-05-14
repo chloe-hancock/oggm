@@ -137,7 +137,7 @@ def run_with_runoff_for_sa(gdir, *,
 
     # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
-    # TODO, I need to run with smb? How can I run this here?
+
     # Uses run with hydro to calculate hydrological output, so we can calculate the runoff
     run_with_hydro(
         gdir,
@@ -158,6 +158,7 @@ def run_with_runoff_for_sa(gdir, *,
 
     # These summed variabels give the total runoff from the glacier
     runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
+    
     # TODO: Update the years that we are looking at here, we do not have to cut this down. We can do this later if we need.
     y1 = years[0] + spinup_period
     y2 = years[-1]
@@ -168,10 +169,9 @@ def run_with_runoff_for_sa(gdir, *,
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
     df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
 
-    # smb = (df_volume[0:] - df_volume[:-1]) * 1e9 # TODO: Check we might need to divide this by something... Check the units and the logic here??
-
-    smb = np.full_like(df_volume, np.nan)
-    smb[1:] = (df_volume[1:] - df_volume[:-1]) * cfg.PARAMS['ice_density']
+    # Mass = Volume*Density => dM = dV*Density 
+    dM = np.full_like(df_volume, np.nan)
+    dM[1:] = (df_volume[1:] - df_volume[:-1]) * cfg.PARAMS['ice_density'] # Annual change in mass
 
     # Extract the relevant runoff variables
     df_annual = ds[runoff_vars].to_dataframe()
@@ -182,9 +182,9 @@ def run_with_runoff_for_sa(gdir, *,
 
     # Write the output to a csv file
     df = pd.DataFrame({
-            'years': list(range(y1,y2+1)),
+            'years': list(range(y1,y2)),
             'runoff_Mt': runoff,
-            'mass_balance': smb,
+            'mass_balance': dM,
             'area_km2': df_area,
             'volume_km3': df_volume})
     
@@ -290,8 +290,8 @@ def parameter_bounding(
         warnings.warn("Only one sample satisfies the selected bounds. "
                          "Try relaxing percentile or Hugonnet range.", UserWarning)
         
-        lb = X[mask][0] - 0.5
-        ub = X[mask][0] + 0.5
+        lb = X[mask][0] - 1.0
+        ub = X[mask][0] + 1.0
         good_X = X[mask]
         return lb, ub, good_X
     
@@ -308,7 +308,7 @@ def parameter_bounding(
 # Metric calculator for hydro outputs - for Sensitivity Analysis
 #######################################################################
 def hydro_output_metric_calculator(runoff):
-    '''
+    """
     Calculates the output metrics for runoff, the mean and the standard deviation. 
 
     This is currently only used for calculting the mean and standard deviation of the runoff
@@ -319,6 +319,7 @@ def hydro_output_metric_calculator(runoff):
 
     runoff: np.array
         The runoff time series generated from the oggm_sim method, when the output is the runoff time series.
+    
     Return:
     ------------
 
@@ -326,7 +327,7 @@ def hydro_output_metric_calculator(runoff):
         An array containing the values of:
             - The annual runoff mean.
             - The annual runoff standard deviation.
-    '''
+    """
 
     YY = np.nan * np.ones((len(runoff), 2))
 
@@ -345,6 +346,29 @@ def runoff_execution(
         ref_area_yr, spinup_period, out_dir,
         csv_filepath, params_csv_filepath,
         run_task, mb_model_method):
+    """
+    Parameters:
+    ------------
+    fun_test
+    X
+    gdir
+    years
+    init_model_yr
+    ys
+    min_ys
+    ref_area_yr
+    spinup_period
+    out_dir
+    csv_filepath
+    params_csv_filepath
+    run_task
+    mb_model_method
+    
+    Return:
+    ------------
+
+    out_list : np.array
+    """
 
     all_experiments = []
 
