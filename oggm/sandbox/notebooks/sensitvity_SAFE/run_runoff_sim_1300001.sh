@@ -9,16 +9,13 @@
 
 # === DEFINE PARAMETERS ===
 MULTI_PROCESS=True   
-N=5000
+N=100
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
-RGI_IDS='RGI60-13.00001'
+RGI_IDS=(RGI60-06.00001 RGI60-13.00001)
 
-# XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
-# XMAX="17.0 10.0 15.0" # Maximum values for each parameter
-
-XMAX="14.13561221  8.95813384 -2.69406789"
-XMIN="1.6068346   0.1570234  -6.43830081"
+XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
+XMAX="17.0 10.0 15.0" # Maximum values for each parameter
 
 # === PATHS ===
 # On every node, when slurm starts a job, it will make sure the directory
@@ -53,7 +50,7 @@ export PYTHONUNBUFFERED=1
 python "$RUN_SCRIPT" \
     --work_dir $OGGM_WORKDIR \
     --out_dir $OGGM_OUTDIR \
-    --rgi_ids $RGI_IDS \
+    --rgi_ids "${RGI_IDS[@]}" \
     --N $N \
     --output_csv_path $OUTPUT_CSV_PATH \
     --params_csv_path $PARAMS_CSV_PATH \
@@ -64,7 +61,11 @@ python "$RUN_SCRIPT" \
 
 echo "Copying files..."
 mkdir -p glacier_outs
-rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS+"reduced"
+
+for rid in "${RGI_IDS[@]}"; do
+    rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$rid/
+done
+
 # rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output
 
 # Print a final message so you can actually see it being done in the output log.

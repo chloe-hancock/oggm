@@ -124,7 +124,6 @@ def run_with_runoff_for_sa(gdir, *,
     if save_output:
         param_df.to_csv(out_dir + '/' + str(row_index) + params_csv_filepath, index=False)
 
-
     # Calculate the mass balance model with the new mass balance parameters
     mb = mb_model_method(
         gdir,
@@ -233,9 +232,6 @@ def parameter_bounding(
     # Prepare arrays 
     y_area = np.asarray(y_area)
     y_mass_balance = np.asarray(y_mass_balance)
-
-    print("MASS BALANCE: ", y_mass_balance)
-    print("HUGONNET ERRORS: ", lower_error, upper_error)
 
     # Areas at the RGI year, before and after
     area_at_rgi_yr = []
