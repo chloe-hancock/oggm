@@ -5,27 +5,19 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node08
+#SBATCH --nodelist=node07
 
 # === DEFINE PARAMETERS ===
 MULTI_PROCESS=True   
-N=5000
+N=100
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
-RGI_IDS=RGI60-06.00001
+RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
 
 XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
 XMAX="17.0 10.0 15.0" # Maximum values for each parameter
 
-# After
-# XMAX="3.27491219  0.86718002 -2.88411379"
-# XMIN="2.27491219 -0.13281998 -3.88411379"
-
-# # Before
-# XMAX="2.55278266  0.81903717 -0.78842941"
-# XMIN="1.64705155  0.58564001 -2.29988439"
-
-# === PATHS ===
+# PATHS
 # On every node, when slurm starts a job, it will make sure the directory
 # /work/username exists and is writable by the jobs user.
 # We create a sub-directory there for this job to store its runtime data at.
@@ -39,8 +31,8 @@ mkdir -p "$OGGM_OUTDIR"
 export OGGM_OUTDIR
 echo "Output dir for this run: $OGGM_OUTDIR"
 
-OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/oggm_20260323.sif"
-RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/runoff_sim.py"
+OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/oggm_20260323.sif"
+RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/runoff_sim.py"
 
 # Stop script on error
 set -e
@@ -49,7 +41,6 @@ set -e
 # 1. Activate Conda
 #######################################
 source /home/local/sw/miniconda/3.14/etc/profile.d/conda.sh
-
 conda activate oggm_env
 
 # Ensure Python prints immediately
@@ -59,7 +50,7 @@ export PYTHONUNBUFFERED=1
 python "$RUN_SCRIPT" \
     --work_dir $OGGM_WORKDIR \
     --out_dir $OGGM_OUTDIR \
-    --rgi_ids $RGI_IDS \
+    --rgi_ids "${RGI_IDS[@]}" \
     --N $N \
     --output_csv_path $OUTPUT_CSV_PATH \
     --params_csv_path $PARAMS_CSV_PATH \
@@ -69,8 +60,12 @@ python "$RUN_SCRIPT" \
 # Write out
 
 echo "Copying files..."
-mkdir -p glacier_outs
-rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$RGI_IDS
+mkdir -p glacier_outs/prior
+
+for rid in "${RGI_IDS[@]}"; do
+    rsync -avzh "$OGGM_OUTDIR/" glacier_outs/prior/$rid/
+done
+
 # rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output
 
 # Print a final message so you can actually see it being done in the output log.

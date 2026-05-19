@@ -8,7 +8,7 @@ from oggm import cfg, workflow, utils
 from oggm.core.sensitivity import hydro_output_metric_calculator
 
 from oggm.core.sensitivity import parameter_bounding
-from oggm.sandbox.notebooks.sensitvity_SAFE.read_csvs_and_plot import read_csvs
+from oggm.oggm.sandbox.sensitvity_SAFE.read_csvs_and_plot import read_csvs
 
 
 import safepython.PAWN as PAWN # Module to calculate PAWN sensitivity indices

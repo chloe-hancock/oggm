@@ -5,7 +5,7 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node07
+#SBATCH --nodelist=node08
 
 # DEFINE PARAMETERS 
 RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
@@ -13,12 +13,9 @@ N=100
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 
-XMAX="17.0 10.0 15.0"
-XMIN="1.5 0.1 -15.0"
-
 # PATHS 
-OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/oggm_20260323.sif"
-RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/read_csvs_and_plot.py"
+OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/oggm_20260323.sif"
+RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/read_csvs_and_plot.py"
 
 # Stop script on error
 set -e
@@ -26,24 +23,22 @@ set -e
 #######################################
 # 1. Activate Conda
 #######################################
-
-echo "SLURM STARTED at $(date)"
-hostname
-
-echo "Sourcing conda..."
 source /home/local/sw/miniconda/3.14/etc/profile.d/conda.sh
-
-echo "Activating env..."
 conda activate oggm_env
-
-echo "Conda activated successfully"
 
 # Ensure Python prints immediately
 export PYTHONUNBUFFERED=1
 
 for rid in "${RGI_IDS[@]}"; do 
-    OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/prior/$rid" 
+    CSV="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/glacier_outs/prior/$rid/reduced_bounds.csv"
+    
+    line=$(sed -n '2p' "$CSV")
+    IFS=',' read -r glacier xmin1 xmin2 xmin3 xmax1 xmax2 xmax3 <<< "$line"
+    
+    XMAX="$xmax1 $xmax2 $xmax3"
+    XMIN="$xmin1 $xmin2 $xmin3"
 
+    OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/glacier_outs/posterior/$rid" 
 
     # RUN THE PYTHON SCRIPT
     python "$RUN_SCRIPT" \
