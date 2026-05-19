@@ -8,13 +8,10 @@
 #SBATCH --nodelist=node08
 
 # DEFINE PARAMETERS 
-RGI_IDS=(RGI60-06.00001 RGI60-13.00001)
+RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
 N=100
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
-
-XMAX="17.0 10.0 15.0"
-XMIN="1.5 0.1 -15.0"
 
 # PATHS 
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/oggm_20260323.sif"
@@ -33,8 +30,15 @@ conda activate oggm_env
 export PYTHONUNBUFFERED=1
 
 for rid in "${RGI_IDS[@]}"; do 
-    OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/$rid" 
+    CSV="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/prior/$rid/reduced_bounds.csv"
+    
+    line=$(sed -n '2p' "$CSV")
+    IFS=',' read -r glacier xmin1 xmin2 xmin3 xmax1 xmax2 xmax3 <<< "$line"
+    
+    XMAX="$xmax1 $xmax2 $xmax3"
+    XMIN="$xmin1 $xmin2 $xmin3"
 
+    OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/posterior/$rid" 
 
     # RUN THE PYTHON SCRIPT
     python "$RUN_SCRIPT" \

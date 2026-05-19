@@ -1,7 +1,7 @@
 from oggm import entity_task
 import logging
 import numpy as np
-from oggm.core.flowline import run_with_hydro
+from oggm.core.flowline import partial, run_with_hydro
 from oggm.core.massbalance import MonthlyTIModel
 import oggm.cfg as cfg
 import pandas as pd
@@ -19,36 +19,23 @@ import warnings
 # Module logger
 log = logging.getLogger(__name__)
 
-# Globals used by the callback
-PROGRESS_TOTAL = None
-PROGRESS_START_T = None
-PROGRESS_UPDATE = None
-PROGRESS_GLACIER = None
-PROGRESS_BAR = None
 
+def progress_callback_fn(i, X, rgi_id):
+    total = len(X)
+    update = 5
 
-def progress_callback_fn(i):
-    """Fully spawn-safe parallel progress bar callback."""
-    global PROGRESS_TOTAL, PROGRESS_UPDATE, PROGRESS_GLACIER, PROGRESS_START_T, PROGRESS_BAR
+    if (i % update == 0) or (i == total):
+        elapsed = 0  # optional (you can track externally)
 
-    # Workers initialize on first call
-    if PROGRESS_TOTAL is None:
-        PROGRESS_TOTAL   = int(os.environ["OGGM_CB_TOTAL"])
-        PROGRESS_UPDATE  = int(os.environ["OGGM_CB_UPDATE"])
-        PROGRESS_GLACIER = int(os.environ["OGGM_CB_GLACIER"])
-        PROGRESS_START_T = float(os.environ["OGGM_CB_START"])
-        PROGRESS_BAR = tqdm(total=PROGRESS_TOTAL, disable=True)
-
-    PROGRESS_BAR.update(1)
-
-    if (i % PROGRESS_UPDATE == 0) or (i == PROGRESS_TOTAL):
-        elapsed = time.time() - PROGRESS_START_T
         bar_str = tqdm.format_meter(
-            n=i, total=PROGRESS_TOTAL, elapsed=elapsed,
+            n=i,
+            total=total,
+            elapsed=elapsed,
             ncols=40,
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} samples"
         )
-        print(f"Glacier {PROGRESS_GLACIER}: {bar_str}", file=sys.stderr, flush=True)
+
+        print(f"Glacier {rgi_id}: {bar_str}", flush=True)
 
 
 #######################################################################
@@ -190,8 +177,10 @@ def run_with_runoff_for_sa(gdir, *,
     if save_output:
         df.to_csv(out_dir + '/' + str(row_index) + csv_filepath, index=False)
 
+    
     if progress_callback is not None:
-        progress_callback_fn(row_index + 1)
+        progress_callback(row_index+1)
+
 
     return np.array(runoff) 
 
@@ -382,6 +371,12 @@ def runoff_execution(
         mb_model_method=mb_model_method,
     )
 
+    progress_cb = partial(
+        progress_callback_fn,
+        X=X,
+        rgi_id=gdir.rgi_id
+    )
+
     for i, sample_row in enumerate(X):
 
         # build kwargs
@@ -390,7 +385,7 @@ def runoff_execution(
             mb_params=sample_row,
             row_index=i,
             settings_filesuffix=f"_exp{i}",
-            progress_callback=progress_callback_fn,
+            progress_callback=progress_cb,
         )
 
         # append

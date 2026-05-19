@@ -515,54 +515,73 @@ def plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
+
+    csv_outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds.csv")
+    
+
+    with open(csv_outpath, 'w') as f:
+        f.write("glacier,xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
+
+        for j in range(num_of_glaciers):
+            xmin = new_lower_bounds_list[j]
+            xmax = new_upper_bounds_list[j]
+
+            if xmin is None or xmax is None:
+                print(f"Bounds for glacier {j} are None, skipping saving to CSV.")
+                continue
+            else:
+                f.write(f"{j},{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
+
+            print(f"Saved bounds for glacier {j}")
+
     return good_X_list
 
-def plot_parameter_bounding_3d(params_dict, good_X_list, num_of_glaciers):
-# -----------------------------
-# 3. 3D scatter plots
-# -----------------------------
-    fig3d = plt.figure(figsize=(6, 4 * num_of_glaciers))
-    axs3d = []
-    for j in range(num_of_glaciers):
-        ax3d = fig3d.add_subplot(
-            num_of_glaciers, 1, j + 1, projection='3d'
-        )
-        axs3d.append(ax3d)
-        ax3d.scatter(
-            params_dict[j][:, 0],
-            params_dict[j][:, 1],
-            params_dict[j][:, 2],
-            s=10,
-            color='grey',
-            alpha=0.3
-        )
-        ax3d.scatter(
-            good_X_list[j][:, 0],
-            good_X_list[j][:, 1],
-            good_X_list[j][:, 2],
-            s=25,
-            color='red'
-        )
-        ax3d.set_xlabel('melt_f')
-        ax3d.set_ylabel('prcp_fac')
-        ax3d.set_zlabel('temp_bias')
-        ax3d.set_title(f'Glacier {j}')
-    # -----------------------------
-    # 4. Save rotated views (cluster-safe)
-    # -----------------------------
-    views = [(20, 30), (20, 120), (60, 30)]
-    for elev, azim in views:
-        for ax in axs3d:
-            ax.view_init(elev=elev, azim=azim)
-        plt.savefig(
-            os.path.join(
-                cfg.PATHS['working_dir'],
-                f"reduced_bounds_3D_e{elev}_a{azim}.png"
-            ),
-            dpi=200,
-            bbox_inches='tight'
-        )
-    plt.close(fig3d)
+# def plot_parameter_bounding_3d(params_dict, good_X_list, num_of_glaciers):
+# # -----------------------------
+# # 3D scatter plots
+# # -----------------------------
+#     fig3d = plt.figure(figsize=(6, 4 * num_of_glaciers))
+#     axs3d = []
+#     for j in range(num_of_glaciers):
+#         ax3d = fig3d.add_subplot(
+#             num_of_glaciers, 1, j + 1, projection='3d'
+#         )
+#         axs3d.append(ax3d)
+#         ax3d.scatter(
+#             params_dict[j][:, 0],
+#             params_dict[j][:, 1],
+#             params_dict[j][:, 2],
+#             s=10,
+#             color='grey',
+#             alpha=0.3
+#         )
+#         ax3d.scatter(
+#             good_X_list[j][:, 0],
+#             good_X_list[j][:, 1],
+#             good_X_list[j][:, 2],
+#             s=25,
+#             color='red'
+#         )
+#         ax3d.set_xlabel('melt_f')
+#         ax3d.set_ylabel('prcp_fac')
+#         ax3d.set_zlabel('temp_bias')
+#         ax3d.set_title(f'Glacier {j}')
+#     # -----------------------------
+#     # Save rotated views
+#     # -----------------------------
+#     views = [(20, 30), (20, 120), (60, 30)]
+#     for elev, azim in views:
+#         for ax in axs3d:
+#             ax.view_init(elev=elev, azim=azim)
+#         plt.savefig(
+#             os.path.join(
+#                 cfg.PATHS['working_dir'],
+#                 f"reduced_bounds_3D_e{elev}_a{azim}.png"
+#             ),
+#             dpi=200,
+#             bbox_inches='tight'
+#         )
+#     plt.close(fig3d)
 
 if __name__ == "__main__":
         main()

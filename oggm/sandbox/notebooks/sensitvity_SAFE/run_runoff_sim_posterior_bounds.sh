@@ -12,12 +12,9 @@ MULTI_PROCESS=True
 N=100
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
-RGI_IDS=(RGI60-06.00001 RGI60-13.00001)
+RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
 
-XMIN="1.5 0.1 -15.0" # Minimum values for each parameter
-XMAX="17.0 10.0 15.0" # Maximum values for each parameter
-
-# === PATHS ===
+# PATHS
 # On every node, when slurm starts a job, it will make sure the directory
 # /work/username exists and is writable by the jobs user.
 # We create a sub-directory there for this job to store its runtime data at.
@@ -46,24 +43,44 @@ conda activate oggm_env
 # Ensure Python prints immediately
 export PYTHONUNBUFFERED=1
 
-# === RUN THE PYTHON SCRIPT ===
-python "$RUN_SCRIPT" \
-    --work_dir $OGGM_WORKDIR \
-    --out_dir $OGGM_OUTDIR \
-    --rgi_ids "${RGI_IDS[@]}" \
-    --N $N \
-    --output_csv_path $OUTPUT_CSV_PATH \
-    --params_csv_path $PARAMS_CSV_PATH \
-    --x_max "$XMAX" \
-    --x_min "$XMIN"
+# Default fallback values
+DEFAULT_XMIN="1.5 0.1 -15.0"
+DEFAULT_XMAX="17.0 10.0 15.0"
+
+for rid in "${RGI_IDS[@]}"; do 
+    CSV="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/prior/$rid/reduced_bounds.csv"
+    if [[ -s "$CSV" && -n "$(sed -n '2p' "$CSV")" ]]; then
+        line=$(sed -n '2p' "$CSV")
+        IFS=',' read -r glacier xmin1 xmin2 xmin3 xmax1 xmax2 xmax3 <<< "$line"
+    
+        XMAX="$xmax1 $xmax2 $xmax3"
+        XMIN="$xmin1 $xmin2 $xmin3"
+    else
+        echo "Warning: $CSV is missing or empty. Using default bounds for $rid."
+        XMAX="$DEFAULT_XMAX"
+        XMIN="$DEFAULT_XMIN"
+    fi
+
+    OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/notebooks/sensitvity_SAFE/glacier_outs/posterior/$rid" 
+
+    # RUN THE PYTHON SCRIPT
+    python "$RUN_SCRIPT" \
+        --work_dir $OGGM_WORKDIR \
+        --out_dir $OGGM_OUTDIR \
+        --rgi_ids "$rid" \
+        --N $N \
+        --output_csv_path $OUTPUT_CSV_PATH \
+        --params_csv_path $PARAMS_CSV_PATH \
+        --x_max "$XMAX" \
+        --x_min "$XMIN"
+done
 
 # Write out
-
 echo "Copying files..."
-mkdir -p glacier_outs
+mkdir -p glacier_outs/posterior
 
 for rid in "${RGI_IDS[@]}"; do
-    rsync -avzh "$OGGM_OUTDIR/" glacier_outs/$rid/
+    rsync -avzh "$OGGM_OUTDIR/" glacier_outs/posterior/$rid/
 done
 
 # rsync -avz --no-perms --no-owner --no-group "$OGGM_OUTDIR/" output

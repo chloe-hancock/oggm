@@ -53,27 +53,21 @@ def main():
         cfg.PATHS['working_dir'] = args.work_dir
         cfg.PARAMS['store_model_geometry'] = True
         cfg.PARAMS['min_ice_thick_for_length'] = 1
-        rgi_ids = args.rgi_ids
+        rgi_id = args.rgi_ids
 
         cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
 
         # We pick the elevation-bands glaciers
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
-        gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)
+        gdir = workflow.init_glacier_directories(rgi_id, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)[0]
+
         # Get the Hugonnet mass balance and set up dataframe
         geo_df = utils.get_geodetic_mb_dataframe()
-        geo_df.loc[rgi_ids]
+        geo_df.loc[rgi_id]
 
         # Hydrological model workflow steps before running with hydro
-
-        num_of_glaciers = len(gdirs)
-
-        rgi_dates = []
-        rgi_area_km2s = []
-
-        for gdir in gdirs:
-                rgi_dates.append(gdir.rgi_date)
-                rgi_area_km2s.append(gdir.rgi_area_km2)
+        rgi_date = gdir.rgi_date
+        rgi_area_km2s = gdir.rgi_area_km2
 
                 # And match the Hugonnet
         geo_df = utils.get_geodetic_mb_dataframe()
@@ -95,31 +89,23 @@ def main():
         N = args.N # Number of samples
 
         X = AAT_sampling(samp_strat, M, distr_fun, distr_par, N) # Generate the samples, start all with the same initial boundaries
-        res_dict = {}
-
-        for i in range(num_of_glaciers):
-                # Set these before calling runoff_execution
-                os.environ["OGGM_CB_GLACIER"] = str(i)
-                os.environ["OGGM_CB_TOTAL"]   = str(len(X))
-                os.environ["OGGM_CB_UPDATE"]  = "5"
-                os.environ["OGGM_CB_START"]   = str(time.time())
-
-                YY = runoff_execution(fun_test = run_with_runoff_for_sa,
-                                         X = X, # All samples
-                                         gdir = gdirs[i], # Hinteresfirner Glacier directory
-                                         years =range(1901, 2021), # years
-                                         init_model_yr = 1901, # Simulation start year - needs to be early enough to allow for spinup before the period we are interested in
-                                         ys =1901, # Start of the simulation
-                                         min_ys = 1901, # Minimum start year
-                                         ref_area_yr = rgi_dates[i], # Reference area year - needs to be a year for which we have observed area data for the glacier, so we can use this to constrain the modelled glacier area during the spinup period
-                                         spinup_period =95, # Spinup period in years (we are cutting this off, once the glacier has reached an equilibrium state, but this can be changed to a different period if desired)
-                                         out_dir = args.out_dir, # Output directory for results
-                                         csv_filepath= args.output_csv_path,
-                                         params_csv_filepath= args.params_csv_path,
-                                         run_task = tasks.run_from_climate_data,
-                                         mb_model_method = MultipleFlowlineMassBalance)
-
-                res_dict[i] = YY
+        
+        runoff_execution(fun_test = run_with_runoff_for_sa,
+                                X = X, # All samples
+                                gdir = gdir, # Hinteresfirner Glacier directory
+                                years =range(1901, 2021), # years
+                                init_model_yr = 1901, # Simulation start year - needs to be early enough to allow for spinup before the period we are interested in
+                                ys =1901, # Start of the simulation
+                                min_ys = 1901, # Minimum start year
+                                ref_area_yr = rgi_date, # Reference area year - needs to be a year for which we have observed area data for the glacier, so we can use this to constrain the modelled glacier area during the spinup period
+                                spinup_period =95, # Spinup period in years (we are cutting this off, once the glacier has reached an equilibrium state, but this can be changed to a different period if desired)
+                                out_dir = args.out_dir, # Output directory for results
+                                csv_filepath= args.output_csv_path,
+                                params_csv_filepath= args.params_csv_path,
+                                run_task = tasks.run_from_climate_data,
+                                mb_model_method = MultipleFlowlineMassBalance)
+        
+        print("Simulations completed for glacier: ", gdir.rgi_id)
 
 if __name__ == "__main__":
         main()
