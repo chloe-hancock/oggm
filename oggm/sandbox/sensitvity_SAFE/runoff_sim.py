@@ -55,8 +55,6 @@ def main():
         cfg.PARAMS['min_ice_thick_for_length'] = 1
         rgi_id = args.rgi_ids
 
-        print("DEBUG: rgi_ids passed to script:", rgi_id)
-
         cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
 
         # We pick the elevation-bands glaciers
