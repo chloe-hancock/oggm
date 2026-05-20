@@ -64,7 +64,6 @@ def main():
     gdir = workflow.init_glacier_directories(rgi_id, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)[0]
     
     N = args.N
-
     rgi_date = gdir.rgi_date
     rgi_area_km2 = gdir.rgi_area_km2
 
@@ -74,8 +73,8 @@ def main():
     mask = geo_df['period'].eq('2000-01-01_2020-01-01')
     selected_gdirs_geo_df = geo_df.loc[geo_df.index.isin([str(rgi_id[0])]) & mask]
 
+    # Convert the Hugonnet Observations to dmdt
     hugonnet_dmdt = selected_gdirs_geo_df['dmdtda'].values[0] * rgi_area_km2
-
     hugonnet_err_dmdt = selected_gdirs_geo_df['err_dmdtda'].values[0] * rgi_area_km2
     
     ##############################################################
@@ -96,6 +95,9 @@ def main():
     runoff_pawn_plot_all(successful_params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=500, k=0)
 
     plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict)
+    plot_parameter_bounding_area(params_dict, successful_params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict)
+    plot_parameter_bounding_hugonnet(params_dict, successful_params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict)
+
 
 ##############################################################
 # Read CSVs
@@ -373,11 +375,9 @@ def plot_parameter_bounding(params_samples, successful_params_samples, area_samp
     ax = axs[0, 0]
     upper_bound = hugonnet_dmdt + hugonnet_err_dmdt
     lower_bound = hugonnet_dmdt - hugonnet_err_dmdt
-    
-    mass_balance_samples = np.concatenate(mass_balance_samples)
 
     # Plotting
-    ax.hist(mass_balance_samples, bins=30, color='grey', edgecolor='white')
+    ax.hist(mb_values, bins=30, color='grey', edgecolor='white')
 
     # Shade region |mean| < threshold
     ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Specific Mass Balance within Hugonnet Error Bounds')
@@ -454,8 +454,8 @@ def plot_parameter_bounding(params_samples, successful_params_samples, area_samp
     if new_lower_bounds is None or new_upper_bounds is None:
         print("No new bounds could be calculated for glacier, likely because no samples satisfied the bounding criteria.")
     else:
-        print("The new upper bounds for glacier %d are: %s" % (new_upper_bounds))
-        print("The new lower bounds for glacier %d are: %s" % (new_lower_bounds))
+        print("The new upper bounds for glacier are: %s" % (new_upper_bounds))
+        print("The new lower bounds for glacier are: %s" % (new_lower_bounds))
 
     X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
     M = len(X_labels)
@@ -467,6 +467,11 @@ def plot_parameter_bounding(params_samples, successful_params_samples, area_samp
 
     params_samples = np.asarray(params_samples)
     good_X_list = np.asarray(good_X_list)
+    good_X_list = np.squeeze(good_X_list)
+   
+    # Ensure it's always 2D: (n_samples, n_params)
+    if good_X_list.ndim == 1:
+        good_X_list = good_X_list.reshape(1, -1)
 
     # loop over parameters and plot scatter
     for i in range(M):
@@ -479,6 +484,7 @@ def plot_parameter_bounding(params_samples, successful_params_samples, area_samp
             color='grey',
             alpha=0.5
         )
+
         if good_X_list.size > 0:
             ax.scatter(
                 good_X_list[:, i],
@@ -500,8 +506,340 @@ def plot_parameter_bounding(params_samples, successful_params_samples, area_samp
         with open(csv_outpath, 'w') as f:
             f.write("glacier,xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
 
-            xmin = new_lower_bounds_list
-            xmax = new_upper_bounds_list
+            xmin = new_lower_bounds_list[0]
+            xmax = new_upper_bounds_list[0]
+
+            if xmin is None or xmax is None:
+                print(f"Bounds for glacier are None, skipping saving to CSV.")
+
+            else:
+                f.write(f"{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
+
+    return good_X_list
+
+##############################################################
+# Constraining the parameters - initial investigation
+##############################################################
+def plot_parameter_bounding_area(params_samples, successful_params_samples, area_samples, mass_balance_samples, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_samples):
+
+    yrs_idx = np.where((years_samples[0] >= 2000) & (years_samples[0] <= 2020))[0].tolist()
+
+    mb_values = []
+    for i in range(len(years_samples)):
+        mbs = mass_balance_samples[i][yrs_idx]
+
+        dmdt_ice = mbs.sum() / len(yrs_idx) # kg ice yr-1
+        dmdt_we  = dmdt_ice * (1000.0 / cfg.PARAMS['ice_density'])
+        mb_values.append(dmdt_we)
+        
+    fig, axs = plt.subplots(
+        1, 1,
+        figsize=(8, 4),
+        squeeze=False
+    )
+
+    ax = axs[0, 0]
+    upper_bound = hugonnet_dmdt + hugonnet_err_dmdt
+    lower_bound = hugonnet_dmdt - hugonnet_err_dmdt
+
+    # Plotting
+    ax.hist(mb_values, bins=30, color='grey', edgecolor='white')
+
+    # Shade region |mean| < threshold
+    ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Specific Mass Balance within Hugonnet Error Bounds')
+    # vertical lines
+    ax.axvline(hugonnet_dmdt, color='teal')
+    ax.axvline(lower_bound, color='teal', linestyle='--')
+    ax.axvline(upper_bound, color='teal', linestyle='--')
+    # labels + title
+    ax.set_xlabel("Mean Mass Balance over 2000-2020")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Glacier: Distribution of Specific Mass Balance in years 2000-2020")
+    ax.legend()
+    
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "specific_mb_dist.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+
+    yrs_area_idx = np.where(years_samples[0] == rgi_date)[0][0]
+
+    areas = []
+    before_areas = []
+    after_areas = [] 
+    for i in range(len(area_samples)):
+        areas.append(area_samples[i][yrs_area_idx])
+        before_areas.append(area_samples[i][yrs_area_idx-1])
+        after_areas.append(area_samples[i][yrs_area_idx+1])
+
+    fig, axs = plt.subplots(
+        1, 1,
+        figsize=(8, 4),
+        squeeze=False
+    )
+
+    ax = axs[0, 0]
+    data_all = np.concatenate([areas, before_areas, after_areas])
+    bins = np.linspace(np.nanmin(data_all), np.nanmax(data_all), 31)
+    
+    # plotting
+    ax.hist(before_areas, bins=bins, color='grey', edgecolor='white', label="Year Before RGI: "+str(rgi_date-1))
+    ax.hist(areas, bins=bins, color='blue', edgecolor='white', alpha=0.25, label="RGI Year: "+str(rgi_date))
+    ax.hist(after_areas, bins=bins, color='red', edgecolor='white', alpha=0.25, label="Year After RGI: "+str(rgi_date+1))
+    
+    # labels + title
+    ax.set_xlabel(r"Area (km$^2$)")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Glacier: Distribution of Areas at the RGI year, and adjacent years.")
+    ax.legend()
+
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "area_dist_at_rgi.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    
+    # Now constraining the parameters 
+    new_lower_bounds_list = []
+    new_upper_bounds_list = []
+    good_X_list = []
+
+    print(yrs_area_idx)
+
+    new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(successful_params_samples, 
+                                                            area_samples, 
+                                                            mb_values,
+                                                            hugonnet=hugonnet_dmdt,
+                                                            hugonnet_error=hugonnet_err_dmdt,
+                                                            obs_area=rgi_area_km2,
+                                                            year_idx=yrs_area_idx,
+                                                            area_percentile=10,
+                                                            area_bounding_flag=True,
+                                                            hugonnet_bounding_flag=False)
+    new_lower_bounds_list.append(new_lower_bounds)
+    new_upper_bounds_list.append(new_upper_bounds)
+    good_X_list.append(good_X)
+
+    if new_lower_bounds is None or new_upper_bounds is None:
+        print("No new bounds could be calculated for glacier, likely because no samples satisfied the bounding criteria.")
+    else:
+        print("The new upper bounds for areaglacier are: %s" % (new_upper_bounds))
+        print("The new lower bounds for areaglacier are: %s" % (new_lower_bounds))
+
+    X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
+    M = len(X_labels)
+    fig, axs = plt.subplots(
+        1, M,
+        figsize=(15, 4),
+        squeeze=False
+    )
+
+    params_samples = np.asarray(params_samples)
+    good_X_list = np.asarray(good_X_list)
+    good_X_list = np.squeeze(good_X_list)
+   
+    # Ensure it's always 2D: (n_samples, n_params)
+    if good_X_list.ndim == 1:
+        good_X_list = good_X_list.reshape(1, -1)
+
+    # loop over parameters and plot scatter
+    for i in range(M):
+        ax = axs[0, i]
+        ax.scatter(
+            params_samples[:, i],
+            params_samples[:, (i+1) % M],
+            s=20,
+            edgecolors='none',
+            color='grey',
+            alpha=0.5
+        )
+
+        if good_X_list.size > 0:
+            ax.scatter(
+                good_X_list[:, i],
+                good_X_list[:, (i+1) % M],
+                s=20,
+                edgecolors='none',
+                color='red'
+            )
+            ax.set_xlabel(X_labels[i])
+            ax.set_ylabel(X_labels[(i+1) % M])
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds_area.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+
+    if good_X_list.size > 0:
+        csv_outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds_area.csv")
+
+        # Save the new bounds to a CSV file
+        with open(csv_outpath, 'w') as f:
+            f.write("glacier,xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
+
+            xmin = new_lower_bounds_list[0]
+            xmax = new_upper_bounds_list[0]
+
+            if xmin is None or xmax is None:
+                print(f"Bounds for glacier are None, skipping saving to CSV.")
+
+            else:
+                f.write(f"{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
+
+    return good_X_list
+
+##############################################################
+# Constraining the parameters - initial investigation
+##############################################################
+def plot_parameter_bounding_hugonnet(params_samples, successful_params_samples, area_samples, mass_balance_samples, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_samples):
+
+    yrs_idx = np.where((years_samples[0] >= 2000) & (years_samples[0] <= 2020))[0].tolist()
+
+    mb_values = []
+    for i in range(len(years_samples)):
+        mbs = mass_balance_samples[i][yrs_idx]
+
+        dmdt_ice = mbs.sum() / len(yrs_idx) # kg ice yr-1
+        dmdt_we  = dmdt_ice * (1000.0 / cfg.PARAMS['ice_density'])
+        mb_values.append(dmdt_we)
+        
+    fig, axs = plt.subplots(
+        1, 1,
+        figsize=(8, 4),
+        squeeze=False
+    )
+
+    ax = axs[0, 0]
+    upper_bound = hugonnet_dmdt + hugonnet_err_dmdt
+    lower_bound = hugonnet_dmdt - hugonnet_err_dmdt
+
+    # Plotting
+    ax.hist(mb_values, bins=30, color='grey', edgecolor='white')
+
+    # Shade region |mean| < threshold
+    ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Specific Mass Balance within Hugonnet Error Bounds')
+    # vertical lines
+    ax.axvline(hugonnet_dmdt, color='teal')
+    ax.axvline(lower_bound, color='teal', linestyle='--')
+    ax.axvline(upper_bound, color='teal', linestyle='--')
+    # labels + title
+    ax.set_xlabel("Mean Mass Balance over 2000-2020")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Glacier: Distribution of Specific Mass Balance in years 2000-2020")
+    ax.legend()
+    
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "specific_mb_dist.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+
+    yrs_area_idx = np.where(years_samples[0] == rgi_date)[0][0]
+
+    areas = []
+    before_areas = []
+    after_areas = [] 
+    for i in range(len(area_samples)):
+        areas.append(area_samples[i][yrs_area_idx])
+        before_areas.append(area_samples[i][yrs_area_idx-1])
+        after_areas.append(area_samples[i][yrs_area_idx+1])
+
+    fig, axs = plt.subplots(
+        1, 1,
+        figsize=(8, 4),
+        squeeze=False
+    )
+
+    ax = axs[0, 0]
+    data_all = np.concatenate([areas, before_areas, after_areas])
+    bins = np.linspace(np.nanmin(data_all), np.nanmax(data_all), 31)
+    
+    # plotting
+    ax.hist(before_areas, bins=bins, color='grey', edgecolor='white', label="Year Before RGI: "+str(rgi_date-1))
+    ax.hist(areas, bins=bins, color='blue', edgecolor='white', alpha=0.25, label="RGI Year: "+str(rgi_date))
+    ax.hist(after_areas, bins=bins, color='red', edgecolor='white', alpha=0.25, label="Year After RGI: "+str(rgi_date+1))
+    
+    # labels + title
+    ax.set_xlabel(r"Area (km$^2$)")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Glacier: Distribution of Areas at the RGI year, and adjacent years.")
+    ax.legend()
+
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "area_dist_at_rgi.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    
+    # Now constraining the parameters 
+    new_lower_bounds_list = []
+    new_upper_bounds_list = []
+    good_X_list = []
+
+    print(yrs_area_idx)
+
+    new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(successful_params_samples, 
+                                                            area_samples, 
+                                                            mb_values,
+                                                            hugonnet=hugonnet_dmdt,
+                                                            hugonnet_error=hugonnet_err_dmdt,
+                                                            obs_area=rgi_area_km2,
+                                                            year_idx=yrs_area_idx,
+                                                            area_percentile=10,
+                                                            area_bounding_flag=True,
+                                                            hugonnet_bounding_flag=False)
+    new_lower_bounds_list.append(new_lower_bounds)
+    new_upper_bounds_list.append(new_upper_bounds)
+    good_X_list.append(good_X)
+
+    if new_lower_bounds is None or new_upper_bounds is None:
+        print("No new bounds could be calculated for glacier, likely because no samples satisfied the bounding criteria.")
+    else:
+        print("The new upper bounds for hugonnetglacier are: %s" % (new_upper_bounds))
+        print("The new lower bounds for hugonnetglacier are: %s" % (new_lower_bounds))
+
+    X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
+    M = len(X_labels)
+    fig, axs = plt.subplots(
+        1, M,
+        figsize=(15, 4),
+        squeeze=False
+    )
+
+    params_samples = np.asarray(params_samples)
+    good_X_list = np.asarray(good_X_list)
+    good_X_list = np.squeeze(good_X_list)
+   
+    # Ensure it's always 2D: (n_samples, n_params)
+    if good_X_list.ndim == 1:
+        good_X_list = good_X_list.reshape(1, -1)
+
+    # loop over parameters and plot scatter
+    for i in range(M):
+        ax = axs[0, i]
+        ax.scatter(
+            params_samples[:, i],
+            params_samples[:, (i+1) % M],
+            s=20,
+            edgecolors='none',
+            color='grey',
+            alpha=0.5
+        )
+
+        if good_X_list.size > 0:
+            ax.scatter(
+                good_X_list[:, i],
+                good_X_list[:, (i+1) % M],
+                s=20,
+                edgecolors='none',
+                color='red'
+            )
+            ax.set_xlabel(X_labels[i])
+            ax.set_ylabel(X_labels[(i+1) % M])
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds_hugonnet.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+
+    if good_X_list.size > 0:
+        csv_outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds_hugonnet.csv")
+
+        # Save the new bounds to a CSV file
+        with open(csv_outpath, 'w') as f:
+            f.write("glacier,xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
+
+            xmin = new_lower_bounds_list[0]
+            xmax = new_upper_bounds_list[0]
 
             if xmin is None or xmax is None:
                 print(f"Bounds for glacier are None, skipping saving to CSV.")

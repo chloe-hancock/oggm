@@ -177,10 +177,8 @@ def run_with_runoff_for_sa(gdir, *,
     if save_output:
         df.to_csv(out_dir + '/' + str(row_index) + csv_filepath, index=False)
 
-    
     if progress_callback is not None:
         progress_callback(row_index+1)
-
 
     return np.array(runoff) 
 
@@ -218,7 +216,8 @@ def parameter_bounding(
         if lower_error >= upper_error:
             raise ValueError("lower_error must be < upper_error.")
         
-    # Prepare arrays 
+    # Prepare arrays
+    X = np.asarray(X) 
     y_area = np.asarray(y_area)
     y_mass_balance = np.asarray(y_mass_balance)
 
@@ -236,57 +235,54 @@ def parameter_bounding(
     area_lower_bound = obs_area * (1 - area_percentile/100)
     area_upper_bound = obs_area * (1 + area_percentile/100)
 
-    # Build mask 
-    # Start with everything selected
-    mask = np.ones(len(y_area), dtype=bool)
-
     area_at_rgi_yr = np.array(area_at_rgi_yr)
     area_before_rgi_yr = np.array(area_before_rgi_yr)
     area_after_rgi_yr = np.array(area_after_rgi_yr)
 
+    # Start from full space
+    mask = np.ones(len(y_area), dtype=bool)
+    
+    area_mask = np.ones(len(y_area), dtype=bool)
+    mass_mask = np.ones(len(y_area), dtype=bool)
+    
     if area_bounding_flag:
         cond_at = (area_at_rgi_yr <= area_upper_bound) & (area_at_rgi_yr >= area_lower_bound)
         cond_before = (area_before_rgi_yr <= area_upper_bound) & (area_before_rgi_yr >= area_lower_bound)
         cond_after = (area_after_rgi_yr <= area_upper_bound) & (area_after_rgi_yr >= area_lower_bound)
         
-        ok_area = (cond_at | cond_before | cond_after)
-        mask &= ok_area
-
-        kept = mask.sum()
-        pct  = (kept / len(y_area)) * 100
-        print(f"After area bounding: {kept}/{len(y_area)} values remain ({pct:.1f}%)")
-
+        area_mask = (cond_at | cond_before | cond_after)
+        print(f"After area bounding: {area_mask.sum()}/{len(y_area)}")
+    
     if hugonnet_bounding_flag:
-        before = mask.sum()  # how many were left before this step
-        mask &= (y_mass_balance >= lower_error) & (y_mass_balance <= upper_error)
-        kept = mask.sum()
-        pct  = (kept / len(y_area)) * 100
-        step_pct = (kept / before) * 100 if before > 0 else 0
-        print(f"After Hugonnet bounding: {kept}/{len(y_area)} values remain "
-              f"({pct:.1f}% of original; {step_pct:.1f}% kept from previous step)")
+        mass_mask = (y_mass_balance >= lower_error) & (y_mass_balance <= upper_error)
+        print(f"After Hugonnet bounding: {mass_mask.sum()}/{len(y_area)}")
+    
+    # Combine
+    mask = area_mask & mass_mask
+
+    print(f"After ALL bounding: {mask.sum()}/{len(y_area)}")
 
     # 4. Apply mask 
     if mask.sum() == 0:
         warnings.warn("No samples satisfy the selected bounds. "
                          "Try relaxing percentile or Hugonnet range.", UserWarning)
-        X = np.array(X)
         empty = np.empty((0, X.shape[1]))
         return None, None, empty
-    if mask.sum() == 1:
+    
+    elif mask.sum() == 1:
         warnings.warn("Only one sample satisfies the selected bounds. "
                          "Try relaxing percentile or Hugonnet range.", UserWarning)
         
         lb = X[mask][0] - 1.0
         ub = X[mask][0] + 1.0
         good_X = X[mask]
-        return lb, ub, good_X
-    
-    good_X = X[mask]
+        
+    else:
+        good_X = X[mask]
+        lb = good_X.min(axis=0)
+        ub = good_X.max(axis=0)
 
     print("There are " + str(len(good_X)) + " samples captured within the given bounds.")
-
-    lb = good_X.min(axis=0)
-    ub = good_X.max(axis=0)
 
     return lb, ub, good_X
 

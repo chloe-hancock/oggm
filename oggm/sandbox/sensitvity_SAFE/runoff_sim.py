@@ -55,6 +55,8 @@ def main():
         cfg.PARAMS['min_ice_thick_for_length'] = 1
         rgi_id = args.rgi_ids
 
+        print("DEBUG: rgi_ids passed to script:", rgi_id)
+
         cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis runs
 
         # We pick the elevation-bands glaciers
@@ -68,7 +70,6 @@ def main():
 
         # Hydrological model workflow steps before running with hydro
         rgi_date = gdir.rgi_date
-        rgi_area_km2s = gdir.rgi_area_km2
 
                 # And match the Hugonnet
         geo_df = utils.get_geodetic_mb_dataframe()
