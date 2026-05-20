@@ -59,6 +59,7 @@ def main():
 
         # We pick the elevation-bands glaciers
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
+
         gdir = workflow.init_glacier_directories(rgi_id, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)[0]
 
         # Get the Hugonnet mass balance and set up dataframe

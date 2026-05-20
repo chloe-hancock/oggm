@@ -5,7 +5,7 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node07
+#SBATCH --nodelist=node05
 
 # DEFINE PARAMETERS 
 RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)

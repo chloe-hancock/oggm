@@ -59,174 +59,150 @@ def main():
     cfg.PARAMS['use_multiprocessing'] = True  # To speed up sensitivity analysis run
     
     # This is a list of RGI IDs
-    rgi_ids = args.rgi_ids
+    rgi_id = args.rgi_ids
     base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup'
-    gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)
+    gdir = workflow.init_glacier_directories(rgi_id, from_prepro_level=4, prepro_border=160, prepro_base_url=base_url)[0]
     
-    num_of_glaciers = len(rgi_ids)
     N = args.N
 
-    rgi_dates = []
-    rgi_area_km2s = []
-
-    for gdir in gdirs:
-        rgi_dates.append(gdir.rgi_date)
-        rgi_area_km2s.append(gdir.rgi_area_km2)
+    rgi_date = gdir.rgi_date
+    rgi_area_km2 = gdir.rgi_area_km2
 
     # And match the Hugonnet
     geo_df = utils.get_geodetic_mb_dataframe()
 
     mask = geo_df['period'].eq('2000-01-01_2020-01-01')
-    selected_gdirs_geo_df = geo_df.loc[geo_df.index.isin([str(rgi_ids[0])]) & mask]
+    selected_gdirs_geo_df = geo_df.loc[geo_df.index.isin([str(rgi_id[0])]) & mask]
 
-    hugonnet_dmdt = selected_gdirs_geo_df['dmdtda'].values * rgi_area_km2s
+    hugonnet_dmdt = selected_gdirs_geo_df['dmdtda'].values[0] * rgi_area_km2
 
-    hugonnet_err_dmdt = selected_gdirs_geo_df['err_dmdtda'].values * rgi_area_km2s
+    hugonnet_err_dmdt = selected_gdirs_geo_df['err_dmdtda'].values[0] * rgi_area_km2
     
     ##############################################################
     # Now call all of our functions!
     ##############################################################
-    mass_balance_dict, years_dict, runoff_dict, area_dict, volume_dict, params_dict, successful_params_dict = read_csvs(args, num_of_glaciers, gdirs, N)
+    mass_balance_dict, years_dict, runoff_dict, area_dict, volume_dict, params_dict, successful_params_dict = read_csvs(args, gdir, N)
 
-    # N = len(mass_balance_dict[0]) # Update N to reflect the number of successful simulations (this is important for the plotting functions and the sensitivity analysis, as we want to make sure we are only including the successful simulations in these steps, and not the ones that failed or are missing)
-    plot_mass_balance_timeseries(mass_balance_dict, years_dict, rgi_ids, num_of_glaciers, N)
-    plot_area_timeseries(area_dict, years_dict, rgi_ids, num_of_glaciers, N, gdirs)
-    plot_volume_timeseries(volume_dict, years_dict, rgi_ids, num_of_glaciers, N)
-    plot_runoff_timeseries(runoff_dict, years_dict, rgi_ids, num_of_glaciers, N)
+    plot_mass_balance_timeseries(mass_balance_dict, years_dict, rgi_id, N)
+    plot_area_timeseries(area_dict, years_dict, rgi_id, N, gdir)
+    plot_volume_timeseries(volume_dict, years_dict, rgi_id, N)
+    plot_runoff_timeseries(runoff_dict, years_dict, rgi_id, N)
     plot_input_hists(params_dict, args)
-    plot_input_distributions(num_of_glaciers, N, mass_balance_dict, rgi_ids)
+    plot_input_distributions( N, mass_balance_dict, rgi_id)
 
-    YY_dict = hydro_output_calculator(runoff_dict, num_of_glaciers)
-    plot_mean_vs_std_runoff(YY_dict, num_of_glaciers)
-    plot_runoff_mean_and_std_distributions(YY_dict, num_of_glaciers)
+    YY_dict = hydro_output_calculator(runoff_dict)
+    plot_mean_vs_std_runoff(YY_dict)
+    plot_runoff_mean_and_std_distributions(YY_dict)
     runoff_pawn_plot_all(successful_params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=500, k=0)
 
-    plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2s, rgi_dates, years_dict, num_of_glaciers, N)
-
+    plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict)
 
 ##############################################################
 # Read CSVs
 ##############################################################
+def read_csvs(args, gdir, N):
+    # Compile the CSVs into lists
+    mass_balance_samples = []
+    years_samples = []
+    runoff_samples = []
+    area_samples = []
+    volume_samples = []
+    params = []
+    successful_params = []
+    
+    for i in range(N):
+        try:
+            path = cfg.PATHS['working_dir'] + '/' + str(i) + args.output_csv_path
+            df = pd.read_csv(path)
+            # Append output arrays
+            area_samples.append(df['area_km2'].values[1:])
+            runoff_samples.append(df['runoff_Mt'].values[1:])
+            mass_balance_samples.append(df['mass_balance'].values[1:])
+            volume_samples.append(df['volume_km3'].values[1:])
+            years_samples.append(df['years'].values[1:])
+            
+            # Read parameters for successful simulations
+            mb_param_df = pd.read_csv(
+                cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
+            )
+            successful_params.append(mb_param_df['params'].to_numpy().ravel())
+        except FileNotFoundError:
+            print(f"No simulation for index {i}")
+        try:
+            # Read parameters
+            mb_param_df = pd.read_csv(
+                cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
+            )
+            params.append(mb_param_df['params'].to_numpy().ravel())
+        except FileNotFoundError:
+            print(f"No parameter file for index {i}")
 
-def read_csvs(args, num_of_glaciers, gdirs, N):
-    # Compile the CSVs 
-    mass_balance_dict = {}
-    years_dict = {}
-    runoff_dict = {}
-    area_dict = {}
-    volume_dict = {}
-    params_dict = {}
-    successful_params_dict = {}
-    for j in range(num_of_glaciers):
-        mass_balance_samples = []
-        years_samples = []
-        runoff_samples = []
-        area_samples = []
-        volume_samples = []
-        params = []
-        successful_params = []
-        for i in range(N):
-            try:
-                path = cfg.PATHS['working_dir'] + '/' + str(i) + args.output_csv_path
-                df = pd.read_csv(path)
-                # Append output arrays
-                area_samples.append(df['area_km2'].values[1:])
-                runoff_samples.append(df['runoff_Mt'].values[1:])
-                mass_balance_samples.append(df['mass_balance'].values[1:])
-                volume_samples.append(df['volume_km3'].values[1:])
-                years_samples.append(df['years'].values[1:])
-                
-                # Read parameters for successful simulations
-                mb_param_df = pd.read_csv(
-                    cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
-                )
-                successful_params.append(mb_param_df['params'].to_numpy().ravel())
-            except FileNotFoundError:
-                print(f"No simulation for index {i}")
-            try:
-                # Read parameters
-                mb_param_df = pd.read_csv(
-                    cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
-                )
-                params.append(mb_param_df['params'].to_numpy().ravel())
-            except FileNotFoundError:
-                print(f"No parameter file for index {i}")
-
-        mass_balance_dict[j] = mass_balance_samples
-        years_dict[j] = years_samples
-        runoff_dict[j] = runoff_samples
-        area_dict[j] = area_samples
-        volume_dict[j] = volume_samples
-        params_dict[j] = np.vstack(params)
-        successful_params_dict[j] = np.vstack(successful_params)
-        print("done glacier: ", gdirs[j].rgi_id)
-    return mass_balance_dict, years_dict, runoff_dict, area_dict, volume_dict, params_dict, successful_params_dict
+    return mass_balance_samples, years_samples, runoff_samples, area_samples, volume_samples, params, successful_params
 
 ##############################################################
 # Plotting Simulation Outputs
 ##############################################################
-def plot_mass_balance_timeseries(mass_balance_dict, years_dict, rgi_ids, num_of_glaciers, N):
+def plot_mass_balance_timeseries(mass_balance_samples, years_samples, rgi_id, N):
     # compile csvs to plot timeseries and plot to view the mass balance time series for each of the samples, to see how they are looking and check that they make sense before we calculate the sensitivity indices
-    plt.figure(figsize=(13,num_of_glaciers*4))
-    print(len(years_dict[0]))
-    for j in range(num_of_glaciers):
-        for i in range(len(years_dict[j])):
-            plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_dict[j][i], mass_balance_dict[j][i], label='sim', color='k', linewidth=0.5)
-        plt.title('Mass balance time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_ids[j]))
-        plt.xlabel('Year'), plt.ylabel('Mass Balance kg m$^-2$')
-        plt.tight_layout()
-        outpath = os.path.join(cfg.PATHS['working_dir'], "mass_balance.png")
-        plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    plt.figure(figsize=(13,4))
 
-def plot_area_timeseries(area_dict, years_dict, rgi_ids, num_of_glaciers, N, gdirs):
-    plt.figure(figsize=(13,num_of_glaciers*4))
-    for j in range(num_of_glaciers):
-        for i in range(len(years_dict[j])):
-            plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_dict[j][i], area_dict[j][i], label='sim', color='k', linewidth=0.5)
-        plt.scatter(gdirs[j].rgi_date, gdirs[j].rgi_area_km2, color='r', s=20, zorder=999)
-        plt.title('Area time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_ids[j]))
-        plt.ylabel('Glacier area (km$^2$)')
-        plt.xlabel('Year')
-        plt.tight_layout()
-        outpath = os.path.join(cfg.PATHS['working_dir'], "area.png")
-        plt.savefig(outpath, dpi=200, bbox_inches='tight')
-    plt.figure(figsize=(13,num_of_glaciers*4))
+    for i in range(len(years_samples)):
+        plt.subplot(1,1,1)
+        plt.plot(years_samples[i], mass_balance_samples[i], label='sim', color='k', linewidth=0.5)
+    plt.title('Mass balance time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
+    plt.xlabel('Year'), plt.ylabel('Mass Balance kg m$^-2$')
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "mass_balance.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
-def plot_volume_timeseries(volume_dict, years_dict, rgi_ids, num_of_glaciers, N):
-    plt.figure(figsize=(13,num_of_glaciers*4))
-    for j in range(num_of_glaciers):
-        for i in range(len(years_dict[j])):
-            plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_dict[j][i], volume_dict[j][i], label='sim', color='k', linewidth=0.5)
-        plt.title('Volume time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_ids[j]))
-        plt.ylabel('Glacier volume (km$^3$)')
-        plt.xlabel('Year')
-        plt.tight_layout()
-        outpath = os.path.join(cfg.PATHS['working_dir'], "volume.png")
-        plt.savefig(outpath, dpi=200, bbox_inches='tight')
-    plt.figure(figsize=(13,num_of_glaciers*4))
+def plot_area_timeseries(area_samples, years_samples, rgi_id, N, gdir):
+    plt.figure(figsize=(13,4))
 
-def plot_runoff_timeseries(runoff_dict, years_dict, rgi_ids, num_of_glaciers, N):
-    plt.figure(figsize=(13,num_of_glaciers*4))
-    for j in range(num_of_glaciers):
-        for i in range(len(years_dict[j])):
-            plt.subplot(num_of_glaciers,1,j+1)
-            plt.plot(years_dict[j][i], runoff_dict[j][i], label='sim', color='k', linewidth=0.5)
+    for i in range(len(years_samples)):
+        plt.subplot(1,1,1)
+        plt.plot(years_samples[i], area_samples[i], label='sim', color='k', linewidth=0.5)
+    plt.scatter(gdir.rgi_date, gdir.rgi_area_km2, color='r', s=20, zorder=999)
+    plt.title('Area time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
+    plt.ylabel('Glacier area (km$^2$)')
+    plt.xlabel('Year')
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "area.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    plt.figure(figsize=(13,4))
 
-        plt.title('Runoff time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_ids[j]))
+def plot_volume_timeseries(volume_samples, years_samples, rgi_id, N):
+    plt.figure(figsize=(13,4))
 
-        plt.ylabel('Runoff (Mt/yr)')
-        plt.xlabel('Year')
-        plt.tight_layout()
-        outpath = os.path.join(cfg.PATHS['working_dir'], "runoff.png")
-        plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    for i in range(len(years_samples)):
+        plt.subplot(1,1,1)
+        plt.plot(years_samples[i], volume_samples[i], label='sim', color='k', linewidth=0.5)
+    plt.title('Volume time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
+    plt.ylabel('Glacier volume (km$^3$)')
+    plt.xlabel('Year')
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "volume.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    plt.figure(figsize=(13,4))
+
+def plot_runoff_timeseries(runoff_samples, years_samples, rgi_id, N):
+    plt.figure(figsize=(13,4))
+
+    for i in range(len(years_samples)):
+        plt.subplot(1,1,1)
+        plt.plot(years_samples[i], runoff_samples[i], label='sim', color='k', linewidth=0.5)
+
+    plt.title('Runoff time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
+
+    plt.ylabel('Runoff (Mt/yr)')
+    plt.xlabel('Year')
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "runoff.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
 ##############################################################
 # Plotting distribution of Inputs
 ##############################################################
-def plot_input_hists(params_dict, args):
+def plot_input_hists(params_samples, args):
 
     x_max = [float(v) for v in args.x_max.split()]
     x_min = [float(v) for v in args.x_min.split()]
@@ -240,17 +216,18 @@ def plot_input_hists(params_dict, args):
     plt.figure(figsize=(13, 4))
     plt.subplot(1,3,1)
     plt.title('Distribution of melt factor', loc='left')
-    plt.hist(params_dict[0][:,0], bins=bins_melt, range=(melt_low, melt_high),
+    params_samples = np.array(params_samples)
+    plt.hist(params_samples[:,0], bins=bins_melt, range=(melt_low, melt_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Melt Factor')
     plt.subplot(1,3,2)
     plt.title('Distribution of precipitation factor', loc='left')
-    plt.hist(params_dict[0][:,1], bins=bins_precip, range=(precip_low, precip_high),
+    plt.hist(params_samples[:,1], bins=bins_precip, range=(precip_low, precip_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Precipitation Factor')
     plt.subplot(1,3,3)
     plt.title('Distribution of temperature bias', loc='left')
-    plt.hist(params_dict[0][:,2], bins=bins_tbias, range=(tbias_low, tbias_high),
+    plt.hist(params_samples[:,2], bins=bins_tbias, range=(tbias_low, tbias_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Temperature Bias')
     plt.tight_layout()
@@ -260,72 +237,72 @@ def plot_input_hists(params_dict, args):
 ##############################################################
 # Plotting Mass Balance Means and Standard Deviations
 ##############################################################
-def plot_input_distributions(num_of_glaciers, N, mass_balance_dict, rgi_ids):
-    mean_mass_balances_dict = {}
-    std_mass_balances_dict  = {}
-    for j in range(num_of_glaciers):     
-        mean_mass_balances_dict[j] = []
-        std_mass_balances_dict[j]  = []
-        for i in range(len(mass_balance_dict[j])): # number of samples
-            mb_series = mass_balance_dict[j][i]
-            mean_mass_balances_dict[j].append(mb_series.mean())
-            std_mass_balances_dict[j].append(mb_series.std())
-    plt.figure(figsize=[13,4*num_of_glaciers])
-    for j in range(num_of_glaciers):
-        min_means, max_means = np.nanmin(mean_mass_balances_dict[j]), np.nanmax(mean_mass_balances_dict[j])
-        min_stds, max_stds = np.nanmin(std_mass_balances_dict[j]), np.nanmax(std_mass_balances_dict[j])
-        nbins = 100
-        bins_means = np.linspace(min_means, max_means, nbins+1)
-        bins_stds = np.linspace(min_stds, max_stds, nbins+1)
-        plt.subplot(num_of_glaciers,2,2*j+1), 
-        plt.title('Distribution of Mean Mass Balance for RGI_ID = %s ' % rgi_ids[j], loc='left')
-        plt.hist(mean_mass_balances_dict[j], range=(min_means, max_means), color='grey');
-        plt.ylabel('Frequency of samples'), plt.xlabel('Mean')
-        # plt.hist(mean_mass_balances_dict[j], bins='auto', range=(min_means, max_means), color='grey');
-        # plt.ylabel('Frequency of samples'), plt.xlabel('Mean')
-        # plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Std of Mass Balance', loc='left'), plt.hist(std_mass_balances_dict[j], bins='auto', 
-        #                                                                                          range=(min_stds, max_stds), color='grey');
-        plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Std of Mass Balance', loc='left'), plt.hist(std_mass_balances_dict[j], bins='auto', color='grey');
-        plt.ylabel('Frequency of samples'), plt.xlabel('Std')
-        plt.tight_layout()
+def plot_input_distributions(N, mass_balance_samples, rgi_id):
+    mean_mass_balances_list = []
+    std_mass_balances_list  = []
+    
+    for i in range(len(mass_balance_samples)): # number of samples
+        mb_series = mass_balance_samples[i]
+        mean_mass_balances_list.append(mb_series.mean())
+        std_mass_balances_list.append(mb_series.std())
+
+    plt.figure(figsize=[13,4])
+
+    min_means, max_means = np.nanmin(mean_mass_balances_list), np.nanmax(mean_mass_balances_list)
+    min_stds, max_stds = np.nanmin(std_mass_balances_list), np.nanmax(std_mass_balances_list)
+    nbins = 100
+    bins_means = np.linspace(min_means, max_means, nbins+1)
+    bins_stds = np.linspace(min_stds, max_stds, nbins+1)
+    plt.subplot(1,2,1), 
+    plt.title('Distribution of Mean Mass Balance for RGI_ID = %s ' % rgi_id, loc='left')
+    plt.hist(mean_mass_balances_list, range=(min_means, max_means), color='grey');
+    plt.ylabel('Frequency of samples'), plt.xlabel('Mean')
+    # plt.hist(mean_mass_balances_dict[j], bins='auto', range=(min_means, max_means), color='grey');
+    # plt.ylabel('Frequency of samples'), plt.xlabel('Mean')
+    # plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Std of Mass Balance', loc='left'), plt.hist(std_mass_balances_dict[j], bins='auto', 
+    #                                                                                          range=(min_stds, max_stds), color='grey');
+    plt.subplot(1,2,2), plt.title('Distribution of Std of Mass Balance', loc='left'), plt.hist(std_mass_balances_list, bins='auto', color='grey');
+    plt.ylabel('Frequency of samples'), plt.xlabel('Std')
+    plt.tight_layout()
+
     outpath = os.path.join(cfg.PATHS['working_dir'], "output_distributions.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
-def hydro_output_calculator(runoff_dict, num_of_glaciers):
-    YY_dict = {}
-    for j in range(num_of_glaciers):   
-        YY_dict[j] = hydro_output_metric_calculator(runoff_dict[j])
-    return YY_dict
+def hydro_output_calculator(runoff_dict):
+    YY_list = hydro_output_metric_calculator(runoff_dict)
+    return YY_list
+
 ##############################################################
 # Plot of Mean vs Std Runoff values
 ##############################################################
-def plot_mean_vs_std_runoff(YY_dict, num_of_glaciers):
-    plt.figure(figsize=[13,num_of_glaciers*4])
-    for j in range(num_of_glaciers):  
-        plt.subplot(num_of_glaciers,3,j+1), plt.scatter(YY_dict[j][:,0], YY_dict[j][:,1], s=5), plt.title('Mean runoff vs Std of runoff'), plt.xlabel('Mean runoff Mt/yr'), plt.ylabel('Std of runoff Mt/yr'),
-        plt.tight_layout()
+def plot_mean_vs_std_runoff(YY_list):
+    plt.figure(figsize=[13,4])
+
+    plt.subplot(1,3,2), plt.scatter(YY_list[:,0], YY_list[:,1], s=5), plt.title('Mean runoff vs Std of runoff'), plt.xlabel('Mean runoff Mt/yr'), plt.ylabel('Std of runoff Mt/yr'),
+    plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "mean_vs_std_runoff.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 ##############################################################
 # Histogram plot of Runoff Mean and Std
 ##############################################################
-def plot_runoff_mean_and_std_distributions(YY_dict, num_of_glaciers):
+def plot_runoff_mean_and_std_distributions(YY_list):
 
-    plt.figure(figsize=[13,num_of_glaciers*4])
-    for j in range(num_of_glaciers):
-        min_mean_ro, max_mean_ro = np.min(YY_dict[j][:,0]), np.max(YY_dict[j][:,0])
-        min_std_ro, max_std_ro = np.min(YY_dict[j][:,1]), np.max(YY_dict[j][:,1])
-        nbins = 50
-        bins_mean_ro = np.linspace(min_mean_ro, max_mean_ro, nbins+1)
-        bins_std_ro = np.linspace(min_std_ro, max_std_ro, nbins+1)
-        plt.subplot(num_of_glaciers,2, 2*j+1), plt.title('Distribution of Runoff Mean', loc='left'), 
-        # plt.hist(YY_dict[j][:,0], bins=bins_mean_ro, color='grey');
-        plt.hist(YY_dict[j][:,0], color='grey');
-        plt.ylabel('Frequency of samples'), plt.xlabel('Mean Runoff (Mt/y)')
-        plt.subplot(num_of_glaciers,2,2*j+2), plt.title('Distribution of Runoff Std', loc='left'), 
-        # plt.hist(YY_dict[j][:,1], bins=bins_std_ro, color='grey');
-        plt.hist(YY_dict[j][:,1], color='grey');
-        plt.ylabel('Frequency of samples'), plt.xlabel('Std Runoff')
+    plt.figure(figsize=[13,4])
+
+    min_mean_ro, max_mean_ro = np.min(YY_list[:,0]), np.max(YY_list[:,0])
+    min_std_ro, max_std_ro = np.min(YY_list[:,1]), np.max(YY_list[:,1])
+    nbins = 50
+    bins_mean_ro = np.linspace(min_mean_ro, max_mean_ro, nbins+1)
+    bins_std_ro = np.linspace(min_std_ro, max_std_ro, nbins+1)
+    plt.subplot(1,2,1), plt.title('Distribution of Runoff Mean', loc='left'), 
+    # plt.hist(YY_dict[j][:,0], bins=bins_mean_ro, color='grey');
+    plt.hist(YY_list[:,0], color='grey');
+    plt.ylabel('Frequency of samples'), plt.xlabel('Mean Runoff (Mt/y)')
+    plt.subplot(1,2,2), plt.title('Distribution of Runoff Std', loc='left'), 
+    # plt.hist(YY_dict[j][:,1], bins=bins_std_ro, color='grey');
+    plt.hist(YY_list[:,1], color='grey');
+    plt.ylabel('Frequency of samples'), plt.xlabel('Std Runoff')
+
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "frequency_mean_vs_std_runoff.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
@@ -333,7 +310,7 @@ def plot_runoff_mean_and_std_distributions(YY_dict, num_of_glaciers):
 ##############################################################
 # Initial PAWN Sensitivity!!
 ##############################################################
-def runoff_pawn_plot_all(params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=500, k=0):
+def runoff_pawn_plot_all(params_samples, YY_list, metric='Mean Runoff', n=5, Nboot=500, k=0):
     # Select output metric
     if metric == 'Mean Runoff':
         i = 0
@@ -341,10 +318,11 @@ def runoff_pawn_plot_all(params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=
         i = 1
     else:
         raise ValueError("metric must be 'Mean Runoff' or 'Std of Runoff'")
-    Y = YY_dict[k][:, i]
+    Y = YY_list[:, i]
     X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
-    # TODO: When more glaciers, run this per glacier
-    KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_dict[0], Y, n, Nboot=Nboot)
+    params_samples = np.array(params_samples)
+
+    KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_samples, Y, n, Nboot=Nboot)
 
     # Aggregate bootstrap samples
     KS_median_m, KS_median_lb, KS_median_ub = aggregate_boot(KS_median)
@@ -374,92 +352,80 @@ def runoff_pawn_plot_all(params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=
 ##############################################################
 # Constraining the parameters - initial investigation
 ##############################################################
-def plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2s, rgi_dates, years_dict, num_of_glaciers, N):
-    mass_balance_dict_in_period = {}
-    for j in range(num_of_glaciers):
-        yrs_idx = np.where((years_dict[j][0] >= 2000) & (years_dict[j][0] <= 2020))[0].tolist()
+def plot_parameter_bounding(params_samples, successful_params_samples, area_samples, mass_balance_samples, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_samples):
 
-        mb_values = []
-        for i in range(len(years_dict[j])):
-            mbs = mass_balance_dict[j][i][yrs_idx]
+    yrs_idx = np.where((years_samples[0] >= 2000) & (years_samples[0] <= 2020))[0].tolist()
 
-            dmdt_ice = mbs.sum() / len(yrs_idx) # kg ice yr-1
-            dmdt_we  = dmdt_ice * (1000.0 / cfg.PARAMS['ice_density'])
-            mb_values.append(dmdt_we)
+    mb_values = []
+    for i in range(len(years_samples)):
+        mbs = mass_balance_samples[i][yrs_idx]
 
-            mass_balance_dict_in_period[j] = mb_values
+        dmdt_ice = mbs.sum() / len(yrs_idx) # kg ice yr-1
+        dmdt_we  = dmdt_ice * (1000.0 / cfg.PARAMS['ice_density'])
+        mb_values.append(dmdt_we)
         
     fig, axs = plt.subplots(
-        num_of_glaciers, 1,
-        figsize=(8, 4*num_of_glaciers),
+        1, 1,
+        figsize=(8, 4),
         squeeze=False
     )
 
-    for j in range(num_of_glaciers):
-        ax = axs[j, 0]
-        upper_bound = hugonnet_dmdt[j] + hugonnet_err_dmdt[j]
-        lower_bound = hugonnet_dmdt[j] - hugonnet_err_dmdt[j]
-        
-        # PLOT INTO THE AXES
-        ax.hist(mass_balance_dict_in_period[j], bins=30, color='grey', edgecolor='white')
-        # Shade region |mean| < threshold
-        ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Specific Mass Balance within Hugonnet Error Bounds')
-        # vertical lines
-        ax.axvline(hugonnet_dmdt[j], color='teal')
-        ax.axvline(lower_bound, color='teal', linestyle='--')
-        ax.axvline(upper_bound, color='teal', linestyle='--')
-        # labels + title
-        ax.set_xlabel("Mean Mass Balance over 2000-2020")
-        ax.set_ylabel("Frequency")
-        ax.set_title(f"Glacier {j}: Distribution of Specific Mass Balance in years 2000-2020")
-        ax.legend()
+    ax = axs[0, 0]
+    upper_bound = hugonnet_dmdt + hugonnet_err_dmdt
+    lower_bound = hugonnet_dmdt - hugonnet_err_dmdt
+    
+    mass_balance_samples = np.concatenate(mass_balance_samples)
+
+    # Plotting
+    ax.hist(mass_balance_samples, bins=30, color='grey', edgecolor='white')
+
+    # Shade region |mean| < threshold
+    ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Specific Mass Balance within Hugonnet Error Bounds')
+    # vertical lines
+    ax.axvline(hugonnet_dmdt, color='teal')
+    ax.axvline(lower_bound, color='teal', linestyle='--')
+    ax.axvline(upper_bound, color='teal', linestyle='--')
+    # labels + title
+    ax.set_xlabel("Mean Mass Balance over 2000-2020")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Glacier: Distribution of Specific Mass Balance in years 2000-2020")
+    ax.legend()
     
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "specific_mb_dist.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
-    
-    area_at_rgi_yr_dict = {}
-    area_before_rgi_yr_dict = {}
-    area_after_rgi_yr_dict = {}
-    yrs_idx = []
-    for j in range(num_of_glaciers):
-        yrs_idx.append(np.where(years_dict[j][0] == rgi_dates[j])[0].tolist()[0])
 
-    for j in range(num_of_glaciers):  
-        area_at_rgi_yr = []
-        area_before_rgi_yr = []
-        area_after_rgi_yr = [] 
+    yrs_area_idx = np.where(years_samples[0] == rgi_date)[0][0]
 
-        for i in range(len(area_dict[j])):
-            area_at_rgi_yr.append(area_dict[j][i][yrs_idx[j]])
-            area_before_rgi_yr.append(area_dict[j][i][yrs_idx[j]-1])
-            area_after_rgi_yr.append(area_dict[j][i][yrs_idx[j]+1])
+    areas = []
+    before_areas = []
+    after_areas = [] 
+    for i in range(len(area_samples)):
+        areas.append(area_samples[i][yrs_area_idx])
+        before_areas.append(area_samples[i][yrs_area_idx-1])
+        after_areas.append(area_samples[i][yrs_area_idx+1])
 
-        area_at_rgi_yr_dict[j] = area_at_rgi_yr
-        area_before_rgi_yr_dict[j] = area_before_rgi_yr
-        area_after_rgi_yr_dict[j] = area_after_rgi_yr
     fig, axs = plt.subplots(
-        num_of_glaciers, 1,
-        figsize=(8, 4*num_of_glaciers),
+        1, 1,
+        figsize=(8, 4),
         squeeze=False
     )
-    for j in range(num_of_glaciers):
-        ax = axs[j, 0]
-        areas = [area_at_rgi_yr_dict[j][i] for i in range(len(area_at_rgi_yr_dict[j]))]
-        before_areas = [area_before_rgi_yr_dict[j][i] for i in range(len(area_before_rgi_yr_dict[j]))]
-        after_areas = [area_after_rgi_yr_dict[j][i] for i in range(len(area_after_rgi_yr_dict[j]))]
-        print(j, len(before_areas), len(areas), len(after_areas))
-        data_all = np.concatenate([areas, before_areas, after_areas])
-        bins = np.linspace(np.nanmin(data_all), np.nanmax(data_all), 31)
-        # plotting
-        ax.hist(before_areas, bins=bins, color='grey', edgecolor='white', label="Year Before RGI: "+str(rgi_dates[j]-1))
-        ax.hist(areas, bins=bins, color='blue', edgecolor='white', alpha=0.25, label="RGI Year: "+str(rgi_dates[j]))
-        ax.hist(after_areas, bins=bins, color='red', edgecolor='white', alpha=0.25, label="Year After RGI: "+str(rgi_dates[j]+1))
-        # labels + title
-        ax.set_xlabel(r"Area (km$^2$)")
-        ax.set_ylabel("Frequency")
-        ax.set_title(f"Glacier {j}: Distribution of Areas at the RGI year, and adjacent years.")
-        ax.legend()
+
+    ax = axs[0, 0]
+    data_all = np.concatenate([areas, before_areas, after_areas])
+    bins = np.linspace(np.nanmin(data_all), np.nanmax(data_all), 31)
+    
+    # plotting
+    ax.hist(before_areas, bins=bins, color='grey', edgecolor='white', label="Year Before RGI: "+str(rgi_date-1))
+    ax.hist(areas, bins=bins, color='blue', edgecolor='white', alpha=0.25, label="RGI Year: "+str(rgi_date))
+    ax.hist(after_areas, bins=bins, color='red', edgecolor='white', alpha=0.25, label="Year After RGI: "+str(rgi_date+1))
+    
+    # labels + title
+    ax.set_xlabel(r"Area (km$^2$)")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Glacier: Distribution of Areas at the RGI year, and adjacent years.")
+    ax.legend()
+
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "area_dist_at_rgi.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
@@ -468,44 +434,55 @@ def plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass
     new_lower_bounds_list = []
     new_upper_bounds_list = []
     good_X_list = []
-    for j in range(num_of_glaciers):
-        new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(successful_params_dict[j], 
-                                                                area_dict[j], 
-                                                                mass_balance_dict_in_period[j],
-                                                                hugonnet=hugonnet_dmdt[j],
-                                                                hugonnet_error=hugonnet_err_dmdt[j],
-                                                                obs_area=rgi_area_km2s[j],
-                                                                year_idx=yrs_idx[j],
-                                                                area_percentile=10,
-                                                                area_bounding_flag=True,
-                                                                hugonnet_bounding_flag=True)
-        new_lower_bounds_list.append(new_lower_bounds)
-        new_upper_bounds_list.append(new_upper_bounds)
-        good_X_list.append(good_X)
-        print("The new upper bounds for glacier %d are: %s" % (j, new_upper_bounds))
-        print("The new lower bounds for glacier %d are: %s" % (j, new_lower_bounds))
+
+    print(yrs_area_idx)
+
+    new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(successful_params_samples, 
+                                                            area_samples, 
+                                                            mb_values,
+                                                            hugonnet=hugonnet_dmdt,
+                                                            hugonnet_error=hugonnet_err_dmdt,
+                                                            obs_area=rgi_area_km2,
+                                                            year_idx=yrs_area_idx,
+                                                            area_percentile=10,
+                                                            area_bounding_flag=True,
+                                                            hugonnet_bounding_flag=True)
+    new_lower_bounds_list.append(new_lower_bounds)
+    new_upper_bounds_list.append(new_upper_bounds)
+    good_X_list.append(good_X)
+
+    if new_lower_bounds is None or new_upper_bounds is None:
+        print("No new bounds could be calculated for glacier, likely because no samples satisfied the bounding criteria.")
+    else:
+        print("The new upper bounds for glacier %d are: %s" % (new_upper_bounds))
+        print("The new lower bounds for glacier %d are: %s" % (new_lower_bounds))
+
     X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
     M = len(X_labels)
     fig, axs = plt.subplots(
-        num_of_glaciers, M,
-        figsize=(15, 4*num_of_glaciers),
+        1, M,
+        figsize=(15, 4),
         squeeze=False
     )
-    for j in range(num_of_glaciers):
-        # loop over parameters and plot scatter
-        for i in range(M):
-            ax = axs[j, i]
+
+    params_samples = np.asarray(params_samples)
+    good_X_list = np.asarray(good_X_list)
+
+    # loop over parameters and plot scatter
+    for i in range(M):
+        ax = axs[0, i]
+        ax.scatter(
+            params_samples[:, i],
+            params_samples[:, (i+1) % M],
+            s=20,
+            edgecolors='none',
+            color='grey',
+            alpha=0.5
+        )
+        if good_X_list.size > 0:
             ax.scatter(
-                params_dict[j][:, i],
-                params_dict[j][:, (i+1) % M],
-                s=20,
-                edgecolors='none',
-                color='grey',
-                alpha=0.5
-            )
-            ax.scatter(
-                good_X_list[j][:, i],
-                good_X_list[j][:, (i+1) % M],
+                good_X_list[:, i],
+                good_X_list[:, (i+1) % M],
                 s=20,
                 edgecolors='none',
                 color='red'
@@ -516,23 +493,21 @@ def plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass
     outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
-    csv_outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds.csv")
-    
+    if good_X_list.size > 0:
+        csv_outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds.csv")
 
-    with open(csv_outpath, 'w') as f:
-        f.write("glacier,xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
+        # Save the new bounds to a CSV file
+        with open(csv_outpath, 'w') as f:
+            f.write("glacier,xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
 
-        for j in range(num_of_glaciers):
-            xmin = new_lower_bounds_list[j]
-            xmax = new_upper_bounds_list[j]
+            xmin = new_lower_bounds_list
+            xmax = new_upper_bounds_list
 
             if xmin is None or xmax is None:
-                print(f"Bounds for glacier {j} are None, skipping saving to CSV.")
-                continue
-            else:
-                f.write(f"{j},{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
+                print(f"Bounds for glacier are None, skipping saving to CSV.")
 
-            print(f"Saved bounds for glacier {j}")
+            else:
+                f.write(f"{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
 
     return good_X_list
 

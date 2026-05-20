@@ -269,6 +269,7 @@ def parameter_bounding(
     if mask.sum() == 0:
         warnings.warn("No samples satisfy the selected bounds. "
                          "Try relaxing percentile or Hugonnet range.", UserWarning)
+        X = np.array(X)
         empty = np.empty((0, X.shape[1]))
         return None, None, empty
     if mask.sum() == 1:
