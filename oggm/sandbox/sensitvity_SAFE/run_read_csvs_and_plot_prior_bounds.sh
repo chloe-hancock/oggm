@@ -8,13 +8,21 @@
 #SBATCH --nodelist=node05
 
 # DEFINE PARAMETERS 
-RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
+# RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
+RGI_IDS=(RGI60-06.00001)
 N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 
-XMAX="17.0 10.0 15.0"
-XMIN="1.5 0.1 -15.0"
+# Minimum values for each parameter
+xmin1=1.5
+xmin2=0.1
+xmin3=-15.0
+
+# Maximum values for each parameter
+xmax1=17.0
+xmax2=10.0
+xmax3=15.0
 
 # PATHS 
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/oggm_20260323.sif"
@@ -52,9 +60,9 @@ for rid in "${RGI_IDS[@]}"; do
         --N $N \
         --output_csv_path $OUTPUT_CSV_PATH \
         --params_csv_path $PARAMS_CSV_PATH \
-        --x_max "$XMAX" \
-        --x_min "$XMIN"
-
+        --x_max $xmax1 $xmax2 $xmax3 \
+        --x_min $xmin1 $xmin2 $xmin3
+        
     echo "Finished processing $rid at $(date)"
 done
 

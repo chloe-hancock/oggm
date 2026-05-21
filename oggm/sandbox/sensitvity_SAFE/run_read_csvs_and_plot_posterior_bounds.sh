@@ -5,11 +5,12 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node08
+#SBATCH --nodelist=node05
 
 # DEFINE PARAMETERS 
-RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
-N=100
+# RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
+RGI_IDS=(RGI60-06.00001)
+N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 
@@ -33,10 +34,7 @@ for rid in "${RGI_IDS[@]}"; do
     CSV="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/glacier_outs/prior/$rid/reduced_bounds.csv"
     
     line=$(sed -n '2p' "$CSV")
-    IFS=',' read -r glacier xmin1 xmin2 xmin3 xmax1 xmax2 xmax3 <<< "$line"
-    
-    XMAX="$xmax1 $xmax2 $xmax3"
-    XMIN="$xmin1 $xmin2 $xmin3"
+    IFS=',' read -r xmin1 xmin2 xmin3 xmax1 xmax2 xmax3 <<< "$line"
 
     OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/glacier_outs/posterior/$rid" 
 
@@ -47,8 +45,8 @@ for rid in "${RGI_IDS[@]}"; do
         --N $N \
         --output_csv_path $OUTPUT_CSV_PATH \
         --params_csv_path $PARAMS_CSV_PATH \
-        --x_max "$XMAX" \
-        --x_min "$XMIN"
+        --x_max $xmax1 $xmax2 $xmax3 \
+        --x_min $xmin1 $xmin2 $xmin3
 
     echo "Finished processing $rid at $(date)"
 done

@@ -106,7 +106,13 @@ def run_with_runoff_for_sa(gdir, *,
     """
 
     melt_f, prcp_fac, temp_bias = mb_params
-    param_df = pd.DataFrame({"params": mb_params})
+
+    param_dict = {
+    "melt_f": melt_f,
+    "prcp_fac": prcp_fac,
+    "temp_bias": temp_bias}
+
+    param_df = pd.DataFrame([param_dict])
 
     if save_output:
         param_df.to_csv(out_dir + '/' + str(row_index) + params_csv_filepath, index=False)

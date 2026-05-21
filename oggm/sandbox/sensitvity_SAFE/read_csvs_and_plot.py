@@ -35,16 +35,13 @@ def get_args():
 
     parser.add_argument("--output_csv_path", type=str, required=True,
                         help="Output CSV paths")
-    
+
     parser.add_argument("--params_csv_path", type=str, required=True,
-                        help="Parameters CSV paths")
+                        help="Parameters CSV path")
 
-    parser.add_argument("--x_max", type=str, required=True,
-                        help="Maximum values for each parameter (space-separated)")
-
-    parser.add_argument("--x_min", type=str, required=True,
-                        help="Minimum values for each parameter (space-separated)")
-
+    parser.add_argument("--x_max", type=float, nargs=3, required=True)
+    
+    parser.add_argument("--x_min", type=float, nargs=3, required=True)
 
     return parser.parse_args()
 
@@ -52,6 +49,10 @@ def main():
 
     # Initialising
     args = get_args()
+
+    print("DEBUG x_min:", args.x_min)
+    print("DEBUG x_max:", args.x_max)
+    
     cfg.initialize(logging_level='CRITICAL')
     cfg.PATHS['working_dir'] = args.work_dir
     cfg.PARAMS['store_model_geometry'] = True
@@ -80,63 +81,75 @@ def main():
     ##############################################################
     # Now call all of our functions!
     ##############################################################
-    mass_balance_dict, years_dict, runoff_dict, area_dict, volume_dict, params_dict, successful_params_dict = read_csvs(args, gdir, N)
+    mass_balance_dict, years_dict, runoff_dict, area_dict, volume_dict, params_samples, params_valid = read_csvs(args, N)
 
     plot_mass_balance_timeseries(mass_balance_dict, years_dict, rgi_id, N)
     plot_area_timeseries(area_dict, years_dict, rgi_id, N, gdir)
     plot_volume_timeseries(volume_dict, years_dict, rgi_id, N)
     plot_runoff_timeseries(runoff_dict, years_dict, rgi_id, N)
-    plot_input_hists(params_dict, args)
-    plot_input_distributions( N, mass_balance_dict, rgi_id)
+    plot_input_hists(params_samples, args)
+    plot_input_distributions(N, mass_balance_dict, rgi_id)
 
     YY_dict = hydro_output_calculator(runoff_dict)
     plot_mean_vs_std_runoff(YY_dict)
     plot_runoff_mean_and_std_distributions(YY_dict)
-    runoff_pawn_plot_all(successful_params_dict, YY_dict, metric='Mean Runoff', n=5, Nboot=500, k=0)
+    runoff_pawn_plot_all(params_valid, YY_dict, metric='Mean Runoff', n=5, Nboot=500, k=0)
 
-    plot_parameter_bounding(params_dict, successful_params_dict, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict)
+    plot_parameter_bounding(args, params_valid, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict)
 
 ##############################################################
 # Read CSVs
 ##############################################################
-def read_csvs(args, gdir, N):
-    # Compile the CSVs into lists
+def read_csvs(args, N):
+
+    # Outputs
     mass_balance_samples = []
     years_samples = []
     runoff_samples = []
     area_samples = []
     volume_samples = []
-    params = []
-    successful_params = []
-    
+
+    # Parameters
+    params_all = [] # All parameter samples
+    params_valid = [] # Successful parameter samples
+
     for i in range(N):
+
+        param_path = cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
+        output_path = cfg.PATHS['working_dir'] + '/' + str(i) + args.output_csv_path
+
+        # Read params
         try:
-            path = cfg.PATHS['working_dir'] + '/' + str(i) + args.output_csv_path
-            df = pd.read_csv(path)
-            # Append output arrays
+            mb_param_df = pd.read_csv(param_path)
+            row = mb_param_df[["melt_f", "prcp_fac", "temp_bias"]].values[0]
+            params_all.append(row)
+        except FileNotFoundError:
+            print(f"No parameter file for index {i}")
+            continue
+
+        # Read outputs if they exist
+        try:
+            df = pd.read_csv(output_path)
+
             area_samples.append(df['area_km2'].values[1:])
             runoff_samples.append(df['runoff_Mt'].values[1:])
             mass_balance_samples.append(df['mass_balance'].values[1:])
             volume_samples.append(df['volume_km3'].values[1:])
             years_samples.append(df['years'].values[1:])
-            
-            # Read parameters for successful simulations
-            mb_param_df = pd.read_csv(
-                cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
-            )
-            successful_params.append(mb_param_df['params'].to_numpy().ravel())
-        except FileNotFoundError:
-            print(f"No simulation for index {i}")
-        try:
-            # Read parameters
-            mb_param_df = pd.read_csv(
-                cfg.PATHS['working_dir'] + '/' + str(i) + args.params_csv_path
-            )
-            params.append(mb_param_df['params'].to_numpy().ravel())
-        except FileNotFoundError:
-            print(f"No parameter file for index {i}")
 
-    return mass_balance_samples, years_samples, runoff_samples, area_samples, volume_samples, params, successful_params
+            # Parameters for successful simulations
+            params_valid.append(row)
+
+        except FileNotFoundError:
+            print(f"Output missing for index {i}")
+
+    # convert to arrays
+    params_all = np.array(params_all)
+    params_valid = np.array(params_valid)
+
+    return (mass_balance_samples, years_samples, runoff_samples,
+            area_samples, volume_samples,
+            params_all, params_valid)
 
 ##############################################################
 # Plotting Simulation Outputs
@@ -203,8 +216,9 @@ def plot_runoff_timeseries(runoff_samples, years_samples, rgi_id, N):
 ##############################################################
 def plot_input_hists(params_samples, args):
 
-    x_max = [float(v) for v in args.x_max.split()]
-    x_min = [float(v) for v in args.x_min.split()]
+    x_max = args.x_max
+    x_min = args.x_min
+
     melt_low, melt_high = x_min[0], x_max[0]
     precip_low, precip_high = x_min[1], x_max[1]
     tbias_low, tbias_high = x_min[2], x_max[2]
@@ -309,7 +323,7 @@ def plot_runoff_mean_and_std_distributions(YY_list):
 ##############################################################
 # Initial PAWN Sensitivity!!
 ##############################################################
-def runoff_pawn_plot_all(params_samples, YY_list, metric='Mean Runoff', n=5, Nboot=500, k=0):
+def runoff_pawn_plot_all(params_valid, YY_list, metric='Mean Runoff', n=5, Nboot=500, k=0):
     # Select output metric
     if metric == 'Mean Runoff':
         i = 0
@@ -319,9 +333,9 @@ def runoff_pawn_plot_all(params_samples, YY_list, metric='Mean Runoff', n=5, Nbo
         raise ValueError("metric must be 'Mean Runoff' or 'Std of Runoff'")
     Y = YY_list[:, i]
     X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
-    params_samples = np.array(params_samples)
+    params_samples = np.array(params_valid)
 
-    KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_samples, Y, n, Nboot=Nboot)
+    KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_valid, Y, n, Nboot=Nboot)
 
     # Aggregate bootstrap samples
     KS_median_m, KS_median_lb, KS_median_ub = aggregate_boot(KS_median)
@@ -351,7 +365,7 @@ def runoff_pawn_plot_all(params_samples, YY_list, metric='Mean Runoff', n=5, Nbo
 ##############################################################
 # Constraining the parameters - initial investigation
 ##############################################################
-def plot_parameter_bounding(params_samples, successful_params_samples, area_samples, mass_balance_samples, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_samples):
+def plot_parameter_bounding(args, params_samples, area_samples, mass_balance_samples, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_samples):
 
     yrs_idx = np.where((years_samples[0] >= 2000) & (years_samples[0] <= 2020))[0].tolist()
 
@@ -434,7 +448,7 @@ def plot_parameter_bounding(params_samples, successful_params_samples, area_samp
 
     print(yrs_area_idx)
 
-    new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(successful_params_samples, 
+    new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_samples, 
                                                             area_samples, 
                                                             mb_values,
                                                             hugonnet=hugonnet_dmdt,
@@ -501,16 +515,16 @@ def plot_parameter_bounding(params_samples, successful_params_samples, area_samp
 
         # Save the new bounds to a CSV file
         with open(csv_outpath, 'w') as f:
-            f.write("glacier,xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
+            f.write("xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
 
-            xmin = new_lower_bounds_list[0]
-            xmax = new_upper_bounds_list[0]
-
-            if xmin is None or xmax is None:
-                print(f"Bounds for glacier are None, skipping saving to CSV.")
-
+            if new_lower_bounds_list is None or new_upper_bounds_list is None:
+                xmin = args.x_min
+                xmax = args.x_max
             else:
-                f.write(f"{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
+                xmin = new_lower_bounds_list[0]
+                xmax = new_upper_bounds_list[0]
+
+            f.write(f"{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
 
     return good_X_list
 

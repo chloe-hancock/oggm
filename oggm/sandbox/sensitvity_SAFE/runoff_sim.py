@@ -34,12 +34,10 @@ def get_args():
     
     parser.add_argument("--params_csv_path", type=str, required=True,
                         help="Parameters CSV paths")
-
-    parser.add_argument("--x_max", type=str, required=True,
-                        help="Maximum values for each parameter")
-
-    parser.add_argument("--x_min", type=str, required=True,
-                        help="Minimum values for each parameter")
+    
+    parser.add_argument("--x_max", type=float, nargs=3, required=True)
+    
+    parser.add_argument("--x_min", type=float, nargs=3, required=True)
     
     parser.add_argument("--out_dir", type=str, required=True,
                         help="Output directory for results (optional)")
@@ -49,6 +47,11 @@ def get_args():
 def main():
 
         args = get_args()
+
+        
+        print("DEBUG x_min:", args.x_min)
+        print("DEBUG x_max:", args.x_max)
+
         cfg.initialize(logging_level='CRITICAL') # To suppress OGGM logging output during the runs
         cfg.PATHS['working_dir'] = args.work_dir
         cfg.PARAMS['store_model_geometry'] = True
@@ -77,8 +80,8 @@ def main():
 
         distr_fun = st.uniform # Uniform distribution for all parameters
         
-        x_max = [float(v) for v in args.x_max.split()]
-        x_min = [float(v) for v in args.x_min.split()]
+        x_max = args.x_max
+        x_min = args.x_min
 
         distr_par = [np.nan] * M
         for i in range(M):
