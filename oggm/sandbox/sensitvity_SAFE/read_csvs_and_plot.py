@@ -49,9 +49,6 @@ def main():
 
     # Initialising
     args = get_args()
-
-    print("DEBUG x_min:", args.x_min)
-    print("DEBUG x_max:", args.x_max)
     
     cfg.initialize(logging_level='CRITICAL')
     cfg.PATHS['working_dir'] = args.work_dir
@@ -141,6 +138,7 @@ def read_csvs(args, N):
             params_valid.append(row)
 
         except FileNotFoundError:
+            print(output_path)
             print(f"Output missing for index {i}")
 
     # convert to arrays

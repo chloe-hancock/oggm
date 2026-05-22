@@ -48,10 +48,6 @@ def main():
 
         args = get_args()
 
-        
-        print("DEBUG x_min:", args.x_min)
-        print("DEBUG x_max:", args.x_max)
-
         cfg.initialize(logging_level='CRITICAL') # To suppress OGGM logging output during the runs
         cfg.PATHS['working_dir'] = args.work_dir
         cfg.PARAMS['store_model_geometry'] = True
