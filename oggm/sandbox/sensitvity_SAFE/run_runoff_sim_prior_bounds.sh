@@ -5,7 +5,7 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node01
+#SBATCH --nodelist=node02
 
 # DEFINE PARAMETERS
 MULTI_PROCESS=True   
@@ -13,8 +13,8 @@ N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 # RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
-# RGI_IDS=(RGI60-06.00001)
-RGI_IDS=(RGI60-13.00001 RGI60-14.00001)
+
+RGI_IDS=(RGI60-06.00377 RGI60-11.00897 RGI60-13.53223)
 
 # Minimum values for each parameter
 xmin1=1.5

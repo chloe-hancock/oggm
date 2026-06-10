@@ -61,8 +61,7 @@ def run_with_runoff_for_sa(gdir, *,
                     save_output= True,
                     progress_callback=None):
     """
-    # TODO: Update the model inputs here and add this into the notebook?
-    # TODO: Remove some of the inputs and workflow? So this is more similar to the run_with_hydro task.
+    
     Calculates the runoff from a glacier using the `run_with_hydro` task, and outputs the timeseries of 
     annual runoff. This also write the following outputs to a CSV: the time series for annual mass balance, 
     time series for annual runoff, the annual area, the annual volume and the years that we are investigating.
@@ -159,7 +158,7 @@ def run_with_runoff_for_sa(gdir, *,
         log.warning(f"No valid hydrological years for parameters {mb_params}")
 
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
-    df_volume = ds['volume_m3'].loc[y1:y2].values * 1e-9
+    df_volume = ds['volume_m3'].loc[y1:y2].values
 
     # Mass = Volume*Density => dM = dV*Density 
     dM = np.full_like(df_volume, np.nan)
@@ -171,6 +170,8 @@ def run_with_runoff_for_sa(gdir, *,
     # Convert runoff from kg → Mt-equivalent and sum components
     df_runoff = df_annual.sum(axis = 1) * 1e-9
     runoff = df_runoff.loc[y1:y2].values
+
+    dM = dM * 1e-9 # Convert to Mt-equivalent
 
     # Write the output to a csv file
     df = pd.DataFrame({
@@ -199,7 +200,7 @@ def parameter_bounding(
     hugonnet_error,
     obs_area,
     year_idx,
-    area_percentile=10,
+    area_percentile=5,
     area_bounding_flag=True,
     hugonnet_bounding_flag=True
 ):

@@ -8,8 +8,9 @@
 
 # DEFINE PARAMETERS 
 # RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
-# RGI_IDS=(RGI60-06.00001)
-RGI_IDS=(RGI60-13.00001 RGI60-14.00001)
+RGI_IDS=(RGI60-06.00001)
+# RGI_IDS=(RGI60-13.00001 RGI60-14.00001)
+
 N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
@@ -23,6 +24,17 @@ xmin3=-15.0
 xmax1=17.0
 xmax2=10.0
 xmax3=15.0
+
+area_uncertainty_central_asia=8.4
+area_uncertainty_south_asia_west=7.7
+area_uncertainty_iceland=2.6
+
+
+AREA_UNCERTAINTY_LIST=(
+    # "$area_uncertainty_central_asia"
+    # "$area_uncertainty_south_asia_west"
+    "$area_uncertainty_iceland"
+)
 
 # PATHS 
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/oggm_20260323.sif"
@@ -49,7 +61,12 @@ echo "Conda activated successfully"
 # Ensure Python prints immediately
 export PYTHONUNBUFFERED=1
 
-for rid in "${RGI_IDS[@]}"; do 
+
+for i in "${!RGI_IDS[@]}"; do 
+
+    rid="${RGI_IDS[$i]}"
+    area_unc="${AREA_UNCERTAINTY_LIST[$i]}"
+
     OGGM_WORKDIR="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/glacier_outs/prior/$rid" 
 
 
@@ -61,8 +78,9 @@ for rid in "${RGI_IDS[@]}"; do
         --output_csv_path $OUTPUT_CSV_PATH \
         --params_csv_path $PARAMS_CSV_PATH \
         --x_max $xmax1 $xmax2 $xmax3 \
-        --x_min $xmin1 $xmin2 $xmin3
-        
+        --x_min $xmin1 $xmin2 $xmin3 \
+        --area_uncertainty $area_unc
+
     echo "Finished processing $rid at $(date)"
 done
 

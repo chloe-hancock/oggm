@@ -91,7 +91,7 @@ def main():
         
         runoff_execution(fun_test = run_with_runoff_for_sa,
                                 X = X, # All samples
-                                gdir = gdir, # Hinteresfirner Glacier directory
+                                gdir = gdir, # Glacier directory
                                 years =range(1901, 2021), # years
                                 init_model_yr = 1901, # Simulation start year - needs to be early enough to allow for spinup before the period we are interested in
                                 ys =1901, # Start of the simulation

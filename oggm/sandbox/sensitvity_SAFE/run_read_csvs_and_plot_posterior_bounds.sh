@@ -19,6 +19,16 @@ PARAMS_CSV_PATH='_params.csv'
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/oggm_20260323.sif"
 RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/read_csvs_and_plot.py"
 
+area_uncertainty_central_asia=8.4
+area_uncertainty_south_asia_west=7.7
+
+
+AREA_UNCERTAINTY_LIST=(
+    "$area_uncertainty_central_asia"
+    "$area_uncertainty_south_asia_west"
+)
+
+
 # Stop script on error
 set -e
 
@@ -31,7 +41,11 @@ conda activate oggm_env
 # Ensure Python prints immediately
 export PYTHONUNBUFFERED=1
 
-for rid in "${RGI_IDS[@]}"; do 
+for i in "${!RGI_IDS[@]}"; do 
+
+    rid="${RGI_IDS[$i]}"
+    area_unc="${AREA_UNCERTAINTY_LIST[$i]}"
+
     CSV="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/glacier_outs/prior/$rid/reduced_bounds.csv"
     
     line=$(sed -n '2p' "$CSV")
@@ -47,7 +61,8 @@ for rid in "${RGI_IDS[@]}"; do
         --output_csv_path $OUTPUT_CSV_PATH \
         --params_csv_path $PARAMS_CSV_PATH \
         --x_max $xmax1 $xmax2 $xmax3 \
-        --x_min $xmin1 $xmin2 $xmin3
+        --x_min $xmin1 $xmin2 $xmin3 \
+        --area_uncertainty $area_unc
 
     echo "Finished processing $rid at $(date)"
 done

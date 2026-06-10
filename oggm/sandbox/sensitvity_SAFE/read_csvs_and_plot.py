@@ -43,6 +43,8 @@ def get_args():
     
     parser.add_argument("--x_min", type=float, nargs=3, required=True)
 
+    parser.add_argument("--area_uncertainty", type=float, nargs='+', required=True)
+
     return parser.parse_args()
 
 def main():
@@ -74,6 +76,8 @@ def main():
     # Convert the Hugonnet Observations to dmdt
     hugonnet_dmdt = selected_gdirs_geo_df['dmdtda'].values[0] * rgi_area_km2
     hugonnet_err_dmdt = selected_gdirs_geo_df['err_dmdtda'].values[0] * rgi_area_km2
+
+    area_uncertainty = args.area_uncertainty[0]
     
     ##############################################################
     # Now call all of our functions!
@@ -92,7 +96,7 @@ def main():
     plot_runoff_mean_and_std_distributions(YY_dict)
     runoff_pawn_plot_all(params_valid, YY_dict, metric='Mean Runoff', n=5, Nboot=500, k=0)
 
-    plot_parameter_bounding(args, params_valid, area_dict, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict)
+    plot_parameter_bounding(args, params_valid, params_samples, area_dict, area_uncertainty, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict, rgi_id)
 
 ##############################################################
 # Read CSVs
@@ -117,6 +121,7 @@ def read_csvs(args, N):
 
         # Read params
         try:
+            
             mb_param_df = pd.read_csv(param_path)
             row = mb_param_df[["melt_f", "prcp_fac", "temp_bias"]].values[0]
             params_all.append(row)
@@ -127,6 +132,9 @@ def read_csvs(args, N):
         # Read outputs if they exist
         try:
             df = pd.read_csv(output_path)
+
+            if np.all(np.abs(df['mass_balance'].values[1:]) < 1e-12):
+                continue
 
             area_samples.append(df['area_km2'].values[1:])
             runoff_samples.append(df['runoff_Mt'].values[1:])
@@ -363,17 +371,16 @@ def runoff_pawn_plot_all(params_valid, YY_list, metric='Mean Runoff', n=5, Nboot
 ##############################################################
 # Constraining the parameters - initial investigation
 ##############################################################
-def plot_parameter_bounding(args, params_samples, area_samples, mass_balance_samples, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_samples):
+def plot_parameter_bounding(args, params_valid,params_samples, area_samples, area_uncertainty, mass_balance_samples, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_samples, rgi_id):
 
     yrs_idx = np.where((years_samples[0] >= 2000) & (years_samples[0] <= 2020))[0].tolist()
 
-    mb_values = []
+    mean_mb_values = []
+    
     for i in range(len(years_samples)):
         mbs = mass_balance_samples[i][yrs_idx]
 
-        dmdt_ice = mbs.sum() / len(yrs_idx) # kg ice yr-1
-        dmdt_we  = dmdt_ice * (1000.0 / cfg.PARAMS['ice_density'])
-        mb_values.append(dmdt_we)
+        mean_mb_values.append(np.mean(mbs))
         
     fig, axs = plt.subplots(
         1, 1,
@@ -384,12 +391,12 @@ def plot_parameter_bounding(args, params_samples, area_samples, mass_balance_sam
     ax = axs[0, 0]
     upper_bound = hugonnet_dmdt + hugonnet_err_dmdt
     lower_bound = hugonnet_dmdt - hugonnet_err_dmdt
-
+    
     # Plotting
-    ax.hist(mb_values, bins=30, color='grey', edgecolor='white')
+    ax.hist(mean_mb_values, bins=30, color='grey', edgecolor='white')
 
     # Shade region |mean| < threshold
-    ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Specific Mass Balance within Hugonnet Error Bounds')
+    ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Annual Glacier Mass Change within Hugonnet Error Bounds')
     # vertical lines
     ax.axvline(hugonnet_dmdt, color='teal')
     ax.axvline(lower_bound, color='teal', linestyle='--')
@@ -397,7 +404,7 @@ def plot_parameter_bounding(args, params_samples, area_samples, mass_balance_sam
     # labels + title
     ax.set_xlabel("Mean Mass Balance over 2000-2020")
     ax.set_ylabel("Frequency")
-    ax.set_title(f"Glacier: Distribution of Specific Mass Balance in years 2000-2020")
+    ax.set_title('Distribution of Annual Glacier Mass Change (2000–2020) in Mt yr⁻¹ for RGI_ID = %s' % rgi_id)
     ax.legend()
     
     plt.tight_layout()
@@ -444,16 +451,14 @@ def plot_parameter_bounding(args, params_samples, area_samples, mass_balance_sam
     new_upper_bounds_list = []
     good_X_list = []
 
-    print(yrs_area_idx)
-
-    new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_samples, 
+    new_lower_bounds, new_upper_bounds, good_X = parameter_bounding(params_valid, 
                                                             area_samples, 
-                                                            mb_values,
+                                                            mean_mb_values,
                                                             hugonnet=hugonnet_dmdt,
                                                             hugonnet_error=hugonnet_err_dmdt,
                                                             obs_area=rgi_area_km2,
                                                             year_idx=yrs_area_idx,
-                                                            area_percentile=10,
+                                                            area_percentile=area_uncertainty,
                                                             area_bounding_flag=True,
                                                             hugonnet_bounding_flag=True)
     new_lower_bounds_list.append(new_lower_bounds)
