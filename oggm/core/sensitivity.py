@@ -1,3 +1,5 @@
+import inspect
+
 from oggm import entity_task
 import logging
 import numpy as np
@@ -45,6 +47,7 @@ def progress_callback_fn(i, X, rgi_id):
 @entity_task(log)
 def run_with_runoff_for_sa(gdir, *,
                     mb_params=None,
+                    glen_a_param=None,
                     row_index=None,
                     years=None,
                     init_model_yr=None,
@@ -69,6 +72,10 @@ def run_with_runoff_for_sa(gdir, *,
     mb_params: tuple
         The mass balance parameters to use for the run, 
         in the order of melt_f, prcp_fac, temp_bias
+    glen_a_param: float
+        The Glen A (creep parameter) value to use for this run, typically expressed
+        as a multiplier of cfg.PARAMS['glen_a'] (e.g. 1.0 = default, 3.0 = regional
+        Alps-like estimate). 
     row_index: int
         The index of the row in the input parameter dataframe, used to create a unique identifier for the output file. 
         This is included to allow for parallel runs with different parameters, where each run can be identified by its row index in the input dataframe.
@@ -106,10 +113,13 @@ def run_with_runoff_for_sa(gdir, *,
 
     melt_f, prcp_fac, temp_bias = mb_params
 
+    glen_a_param = glen_a_param if glen_a_param is not None else cfg.PARAMS['glen_a']
+
     param_dict = {
     "melt_f": melt_f,
     "prcp_fac": prcp_fac,
-    "temp_bias": temp_bias}
+    "temp_bias": temp_bias,
+    "glen_a": glen_a_param}
 
     param_df = pd.DataFrame([param_dict])
 
@@ -129,6 +139,8 @@ def run_with_runoff_for_sa(gdir, *,
     # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
 
+    cfg.PARAMS['glen_a'] = glen_a_param  # Set the Glen A parameter for this run
+
     # Uses run with hydro to calculate hydrological output, so we can calculate the runoff
     run_with_hydro(
         gdir,
@@ -136,6 +148,7 @@ def run_with_runoff_for_sa(gdir, *,
         ys=ys, # The simulation start year
         min_ys=min_ys, # For the run from climate data, to ensure we have data from 1979
         init_model_yr=init_model_yr,
+        glen_a_fac=float(glen_a_param),
         ref_area_yr=ref_area_yr,
         mb_model=mb, # The modified MB model
         store_monthly_hydro=True,
@@ -382,11 +395,16 @@ def runoff_execution(
     )
 
     for i, sample_row in enumerate(X):
+        
+        # split mass-balance params from the Glen A param
+        mb_params_row = sample_row[:3]
+        glen_a_row = sample_row[3]
 
         # build kwargs
         kw = dict(common)
         kw.update(
-            mb_params=sample_row,
+            mb_params=mb_params_row,
+            glen_a_param=glen_a_row,
             row_index=i,
             settings_filesuffix=f"_exp{i}",
             progress_callback=progress_cb,
@@ -470,8 +488,14 @@ def spinup_area_volume(gdir, *,
 
     # Set the parameter values
     melt_f, prcp_fac, temp_bias = mb_params
+    param_dict = {
+    "melt_f": melt_f,
+    "prcp_fac": prcp_fac,
+    "temp_bias": temp_bias}
 
-    # TODO: Can use the other style of massbalance model? Perhaps change this?
+    param_df = pd.DataFrame([param_dict])
+
+    # calculate the mass balance model with the new mass balance parameters
     mb = mb_model_method(
         gdir,
         mb_model_class=MonthlyTIModel,

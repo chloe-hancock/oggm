@@ -35,9 +35,9 @@ def get_args():
     parser.add_argument("--params_csv_path", type=str, required=True,
                         help="Parameters CSV paths")
     
-    parser.add_argument("--x_max", type=float, nargs=3, required=True)
+    parser.add_argument("--x_max", type=float, nargs=4, required=True)
     
-    parser.add_argument("--x_min", type=float, nargs=3, required=True)
+    parser.add_argument("--x_min", type=float, nargs=4, required=True)
     
     parser.add_argument("--out_dir", type=str, required=True,
                         help="Output directory for results (optional)")
@@ -71,7 +71,7 @@ def main():
                 # And match the Hugonnet
         geo_df = utils.get_geodetic_mb_dataframe()
 
-        X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
+        X_labels = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a']
         M = len(X_labels)
 
         distr_fun = st.uniform # Uniform distribution for all parameters

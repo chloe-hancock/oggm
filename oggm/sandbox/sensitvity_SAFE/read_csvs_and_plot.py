@@ -39,9 +39,9 @@ def get_args():
     parser.add_argument("--params_csv_path", type=str, required=True,
                         help="Parameters CSV path")
 
-    parser.add_argument("--x_max", type=float, nargs=3, required=True)
+    parser.add_argument("--x_max", type=float, nargs=4, required=True)
     
-    parser.add_argument("--x_min", type=float, nargs=3, required=True)
+    parser.add_argument("--x_min", type=float, nargs=4, required=True)
 
     parser.add_argument("--area_uncertainty", type=float, nargs='+', required=True)
 
@@ -85,7 +85,7 @@ def main():
     mass_balance_dict, years_dict, runoff_dict, area_dict, volume_dict, params_samples, params_valid = read_csvs(args, N)
 
     plot_mass_balance_timeseries(mass_balance_dict, years_dict, rgi_id, N)
-    plot_area_timeseries(area_dict, years_dict, rgi_id, N, gdir)
+    plot_area_timeseries(area_dict, years_dict, rgi_id, N, gdir, area_uncertainty)
     plot_volume_timeseries(volume_dict, years_dict, rgi_id, N)
     plot_runoff_timeseries(runoff_dict, years_dict, rgi_id, N)
     plot_input_hists(params_samples, args)
@@ -123,7 +123,7 @@ def read_csvs(args, N):
         try:
             
             mb_param_df = pd.read_csv(param_path)
-            row = mb_param_df[["melt_f", "prcp_fac", "temp_bias"]].values[0]
+            row = mb_param_df[["melt_f", "prcp_fac", "temp_bias", "glen_a"]].values[0]
             params_all.append(row)
         except FileNotFoundError:
             print(f"No parameter file for index {i}")
@@ -166,23 +166,74 @@ def plot_mass_balance_timeseries(mass_balance_samples, years_samples, rgi_id, N)
 
     for i in range(len(years_samples)):
         plt.subplot(1,1,1)
-        plt.plot(years_samples[i], mass_balance_samples[i], label='sim', color='k', linewidth=0.5)
+        plt.plot(years_samples[i], mass_balance_samples[i], label='sim', color='k', linewidth=0.5, alpha=0.1)
     plt.title('Mass balance time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
     plt.xlabel('Year'), plt.ylabel('Mass Balance kg m$^-2$')
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "mass_balance.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
-def plot_area_timeseries(area_samples, years_samples, rgi_id, N, gdir):
+def plot_area_timeseries(area_samples, years_samples, rgi_id, N, gdir, area_unc_percent):
     plt.figure(figsize=(13,4))
 
     for i in range(len(years_samples)):
         plt.subplot(1,1,1)
-        plt.plot(years_samples[i], area_samples[i], label='sim', color='k', linewidth=0.5)
-    plt.scatter(gdir.rgi_date, gdir.rgi_area_km2, color='r', s=20, zorder=999)
+        plt.plot(years_samples[i], area_samples[i], label='sim', color='k', linewidth=0.5, alpha=0.1)
+
+    unc = area_unc_percent / 100.0
+
+    lower = gdir.rgi_area_km2 - (gdir.rgi_area_km2*unc)
+    upper = gdir.rgi_area_km2 + (gdir.rgi_area_km2*unc)
+
+    plt.fill_between(
+        [years_samples[0][0], years_samples[0][-1]],  # full time range
+        lower,
+        upper,
+        color='red',
+        alpha=0.5,
+        label=f'Observed ±{area_unc_percent}%'
+        )
+
+    plt.scatter(
+        gdir.rgi_date,
+        gdir.rgi_area_km2,
+        color='red',
+        s=40,
+        zorder=999
+    )
+
+    plt.axhspan(
+        lower,
+        upper,
+        color='red',
+        alpha=0.9,
+        xmin=gdir.rgi_date-1,
+	xmax=gdir.rgi_date+1
+    )
+
+    plt.plot(
+        [years_samples[0][0], years_samples[0][-1]],
+        [lower, lower],
+        color='red',
+        linewidth=2,
+        zorder=5
+    )
+
+    plt.plot(
+        [years_samples[0][0], years_samples[0][-1]],
+        [upper, upper],
+        color='red',
+        linewidth=2,
+        zorder=5
+    )
+
+   
     plt.title('Area time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
     plt.ylabel('Glacier area (km$^2$)')
     plt.xlabel('Year')
+
+    plt.xlim(years_samples[0][0], years_samples[0][-1])
+
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "area.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
@@ -190,10 +241,12 @@ def plot_area_timeseries(area_samples, years_samples, rgi_id, N, gdir):
 
 def plot_volume_timeseries(volume_samples, years_samples, rgi_id, N):
     plt.figure(figsize=(13,4))
-
+    
+    print(len(years_samples), len(volume_samples))
     for i in range(len(years_samples)):
         plt.subplot(1,1,1)
-        plt.plot(years_samples[i], volume_samples[i], label='sim', color='k', linewidth=0.5)
+        print("vol", len(volume_samples[i]))
+        plt.plot(years_samples[i], volume_samples[i], label='sim', color='k', linewidth=0.5, alpha=0.1)
     plt.title('Volume time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
     plt.ylabel('Glacier volume (km$^3$)')
     plt.xlabel('Year')
@@ -207,7 +260,7 @@ def plot_runoff_timeseries(runoff_samples, years_samples, rgi_id, N):
 
     for i in range(len(years_samples)):
         plt.subplot(1,1,1)
-        plt.plot(years_samples[i], runoff_samples[i], label='sim', color='k', linewidth=0.5)
+        plt.plot(years_samples[i], runoff_samples[i], label='sim', color='k', linewidth=0.5, alpha=0.1)
 
     plt.title('Runoff time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
 
@@ -228,30 +281,43 @@ def plot_input_hists(params_samples, args):
     melt_low, melt_high = x_min[0], x_max[0]
     precip_low, precip_high = x_min[1], x_max[1]
     tbias_low, tbias_high = x_min[2], x_max[2]
+    glen_a_low, glen_a_high = x_min[3], x_max[3]
+
     nbins = 50
     bins_melt   = np.linspace(melt_low,   melt_high,   nbins+1)
     bins_precip = np.linspace(precip_low, precip_high, nbins+1)
     bins_tbias  = np.linspace(tbias_low,  tbias_high,  nbins+1)
+    bins_glen_a = np.linspace(glen_a_low, glen_a_high, nbins+1)
+    
     plt.figure(figsize=(13, 4))
-    plt.subplot(1,3,1)
+    plt.subplot(1,4,1)
     plt.title('Distribution of melt factor', loc='left')
     params_samples = np.array(params_samples)
     plt.hist(params_samples[:,0], bins=bins_melt, range=(melt_low, melt_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Melt Factor')
-    plt.subplot(1,3,2)
+    plt.subplot(1,4,2)
     plt.title('Distribution of precipitation factor', loc='left')
     plt.hist(params_samples[:,1], bins=bins_precip, range=(precip_low, precip_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Precipitation Factor')
-    plt.subplot(1,3,3)
+    plt.subplot(1,4,3)
     plt.title('Distribution of temperature bias', loc='left')
     plt.hist(params_samples[:,2], bins=bins_tbias, range=(tbias_low, tbias_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Temperature Bias')
+    plt.subplot(1,4,4)
+    plt.title('Distribution of Glen A multiplier', loc='left')
+    plt.hist(params_samples[:,3], bins=bins_glen_a, range=(glen_a_low, glen_a_high),
+             color='grey', edgecolor='white')
+    plt.ylabel('Frequency of samples'); plt.xlabel('Glen A Multiplier')
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "parameter_distribution.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
+    plt.tight_layout()
+    outpath = os.path.join(cfg.PATHS['working_dir'], "parameter_distribution.png")
+    plt.savefig(outpath, dpi=200, bbox_inches='tight')
+
 
 ##############################################################
 # Plotting Mass Balance Means and Standard Deviations
@@ -338,7 +404,7 @@ def runoff_pawn_plot_all(params_valid, YY_list, metric='Mean Runoff', n=5, Nboot
     else:
         raise ValueError("metric must be 'Mean Runoff' or 'Std of Runoff'")
     Y = YY_list[:, i]
-    X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
+    X_labels = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a_fac']
     params_samples = np.array(params_valid)
 
     KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_valid, Y, n, Nboot=Nboot)
@@ -348,7 +414,7 @@ def runoff_pawn_plot_all(params_valid, YY_list, metric='Mean Runoff', n=5, Nboot
     KS_mean_m,   KS_mean_lb,   KS_mean_ub   = aggregate_boot(KS_mean)
     KS_max_m,    KS_max_lb,    KS_max_ub    = aggregate_boot(KS_max)
     # Plot all in one figure 
-    fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axs = plt.subplots(1, 3, figsize=(24, 6))
     fig.suptitle(f"PAWN Sensitivity Indices\nMetric: {metric}, n={n}, Nboot={Nboot}", fontsize=14)
     # Median KS
     plt.sca(axs[0])
@@ -376,11 +442,13 @@ def plot_parameter_bounding(args, params_valid,params_samples, area_samples, are
     yrs_idx = np.where((years_samples[0] >= 2000) & (years_samples[0] <= 2020))[0].tolist()
 
     mean_mb_values = []
+    mean_mb_values_scaled = []
     
     for i in range(len(years_samples)):
         mbs = mass_balance_samples[i][yrs_idx]
 
         mean_mb_values.append(np.mean(mbs))
+        mean_mb_values_scaled.append((np.mean(mbs))/ rgi_area_km2)
         
     fig, axs = plt.subplots(
         1, 1,
@@ -393,18 +461,18 @@ def plot_parameter_bounding(args, params_valid,params_samples, area_samples, are
     lower_bound = hugonnet_dmdt - hugonnet_err_dmdt
     
     # Plotting
-    ax.hist(mean_mb_values, bins=30, color='grey', edgecolor='white')
+    ax.hist(mean_mb_values_scaled, bins=30, color='grey', edgecolor='white')
 
     # Shade region |mean| < threshold
-    ax.axvspan(lower_bound, upper_bound, color='teal', alpha=0.25, label='Annual Glacier Mass Change within Hugonnet Error Bounds')
+    ax.axvspan(lower_bound/rgi_area_km2, upper_bound/rgi_area_km2, color='teal', alpha=0.15, label='Hugonnet Error Bounds')
     # vertical lines
-    ax.axvline(hugonnet_dmdt, color='teal')
-    ax.axvline(lower_bound, color='teal', linestyle='--')
-    ax.axvline(upper_bound, color='teal', linestyle='--')
+    ax.axvline(hugonnet_dmdt/rgi_area_km2, color='teal')
+    ax.axvline(lower_bound/rgi_area_km2, color='teal', linestyle='--')
+    ax.axvline(upper_bound/rgi_area_km2, color='teal', linestyle='--')
     # labels + title
-    ax.set_xlabel("Mean Mass Balance over 2000-2020")
+    ax.set_xlabel("Mean Glacier Mass Balance over 2000-2020, normalised by glacier area (kg km⁻² yr⁻¹)")
     ax.set_ylabel("Frequency")
-    ax.set_title('Distribution of Annual Glacier Mass Change (2000–2020) in Mt yr⁻¹ for RGI_ID = %s' % rgi_id)
+    ax.set_title('Distribution of Mean Glacier Mass Change (2000–2020) for RGI_ID = %s' % rgi_id)
     ax.legend()
     
     plt.tight_layout()

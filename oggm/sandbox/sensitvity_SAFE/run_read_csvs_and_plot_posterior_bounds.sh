@@ -5,12 +5,11 @@
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --nodelist=node01
+#SBATCH --nodelist=node24
 
 # DEFINE PARAMETERS 
 # RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
-# RGI_IDS=(RGI60-06.00001)
-RGI_IDS=(RGI60-13.00001 RGI60-14.00001)
+RGI_IDS=(RGI60-06.00377 RGI60-11.00897 RGI60-13.53223)
 N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
@@ -19,13 +18,16 @@ PARAMS_CSV_PATH='_params.csv'
 OGGM_IMG="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/oggm_20260323.sif"
 RUN_SCRIPT="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/read_csvs_and_plot.py"
 
-area_uncertainty_central_asia=8.4
 area_uncertainty_south_asia_west=7.7
 
+area_uncertainty_iceland=2.6
+area_uncertainty_central_europe=10.4
+area_uncertainty_central_asia=8.4
 
 AREA_UNCERTAINTY_LIST=(
+    "$area_uncertainty_iceland"
+    "$area_uncertainty_central_europe"
     "$area_uncertainty_central_asia"
-    "$area_uncertainty_south_asia_west"
 )
 
 
@@ -45,6 +47,8 @@ for i in "${!RGI_IDS[@]}"; do
 
     rid="${RGI_IDS[$i]}"
     area_unc="${AREA_UNCERTAINTY_LIST[$i]}"
+
+    echo "Processing $rid with area uncertainty $area_unc"
 
     CSV="/home/users/chancock/OGGM_repo/oggm/oggm/sandbox/sensitvity_SAFE/glacier_outs/prior/$rid/reduced_bounds.csv"
     
