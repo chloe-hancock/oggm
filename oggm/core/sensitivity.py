@@ -43,11 +43,30 @@ def progress_callback_fn(i, X, rgi_id):
 #######################################################################
 # Function for calculating the runoff outputs for Sensitivity Analysis
 #######################################################################
+# Module-level cache, but NOT populated at import time — cfg.PARAMS isn't
+# ready yet when this module is imported (cfg.initialize() hasn't run).
+# Populated lazily on first call to run_with_runoff_for_sa instead.
+_BASELINE_PARAMS = {}
+
+
+def _get_baseline_phase_params():
+    """Fetch (and cache) the true OGGM defaults for temp_all_solid/temp_all_liq.
+
+    Must be called AFTER cfg.initialize() has run — i.e. from inside the
+    entity task, not at module import time.
+    """
+    if not _BASELINE_PARAMS:
+        _BASELINE_PARAMS['temp_all_solid'] = cfg.PARAMS['temp_all_solid']
+        _BASELINE_PARAMS['temp_all_liq'] = cfg.PARAMS['temp_all_liq']
+    return _BASELINE_PARAMS
+
 
 @entity_task(log)
 def run_with_runoff_for_sa(gdir, *,
                     mb_params=None,
                     glen_a_param=None,
+                    phase_shift=None,
+                    temp_melt=None,
                     row_index=None,
                     years=None,
                     init_model_yr=None,
@@ -61,28 +80,32 @@ def run_with_runoff_for_sa(gdir, *,
                     params_csv_filepath=None,
                     run_task=None,
                     mb_model_method=None,
-                    save_output= True,
+                    save_output=True,
                     progress_callback=None):
     """
-    
-    Calculates the runoff from a glacier using the `run_with_hydro` task, and outputs the timeseries of 
-    annual runoff. This also write the following outputs to a CSV: the time series for annual mass balance, 
+    Calculates the runoff from a glacier using the `run_with_hydro` task, and outputs the timeseries of
+    annual runoff. This also writes the following outputs to a CSV: the time series for annual mass balance,
     time series for annual runoff, the annual area, the annual volume and the years that we are investigating.
-    
+
     mb_params: tuple
-        The mass balance parameters to use for the run, 
+        The mass balance parameters to use for the run,
         in the order of melt_f, prcp_fac, temp_bias
     glen_a_param: float
-        The Glen A (creep parameter) value to use for this run, typically expressed
-        as a multiplier of cfg.PARAMS['glen_a'] (e.g. 1.0 = default, 3.0 = regional
-        Alps-like estimate). 
+        Multiplier applied to the default Glen A (creep parameter), passed
+        through as `glen_a_fac` to `flowline_model_run` (via run_task).
+        1.0 = default, 3.0 = 3x default creep rate, etc.
+    phase_shift: float
+        Shift (in the same units as temp_all_solid/temp_all_liq) applied to
+        the rain/snow phase-partitioning thresholds for this run.
+    temp_melt: float
+        The melt temperature threshold to use for this run.
     row_index: int
-        The index of the row in the input parameter dataframe, used to create a unique identifier for the output file. 
+        The index of the row in the input parameter dataframe, used to create a unique identifier for the output file.
         This is included to allow for parallel runs with different parameters, where each run can be identified by its row index in the input dataframe.
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     years: range or list
-        The years we will be using for analysis, which should be a subset of the years for which we run the model. 
+        The years we will be using for analysis, which should be a subset of the years for which we run the model.
     init_model_yr : int
         the year of the initial run you want to start from. The default
         is to take the last year of the simulation.
@@ -97,7 +120,7 @@ def run_with_runoff_for_sa(gdir, *,
         period. Use this kwarg to force a specific area to the state of the
         glacier at the provided simulation year.
     spinup_period: int
-        The number of years to run the model in spinup mode before starting the 
+        The number of years to run the model in spinup mode before starting the
         main simulation.
     settings_filesuffix : str
         a filesuffix for using a specific settings file
@@ -113,20 +136,31 @@ def run_with_runoff_for_sa(gdir, *,
 
     melt_f, prcp_fac, temp_bias = mb_params
 
-    glen_a_param = glen_a_param if glen_a_param is not None else cfg.PARAMS['glen_a']
+    glen_a_param = glen_a_param if glen_a_param is not None else 1.0
+    phase_shift = phase_shift if phase_shift is not None else 0.0
+    temp_melt = temp_melt if temp_melt is not None else cfg.PARAMS['temp_melt']
 
     param_dict = {
-    "melt_f": melt_f,
-    "prcp_fac": prcp_fac,
-    "temp_bias": temp_bias,
-    "glen_a": glen_a_param}
+        "melt_f": melt_f,
+        "prcp_fac": prcp_fac,
+        "temp_bias": temp_bias,
+        "glen_a_fac": glen_a_param,
+        "phase_shift": phase_shift,
+        "temp_melt": temp_melt}
 
     param_df = pd.DataFrame([param_dict])
+
+    # Anchor to fixed baselines, fetched (and cached) lazily on first use —
+    # cfg.PARAMS is guaranteed populated by now, since cfg.initialize() must
+    # already have run for this task to be executing at all.
+    baseline = _get_baseline_phase_params()
+    cfg.PARAMS['temp_all_solid'] = baseline['temp_all_solid'] + phase_shift
+    cfg.PARAMS['temp_all_liq'] = baseline['temp_all_liq'] + phase_shift
+    cfg.PARAMS['temp_melt'] = temp_melt
 
     if save_output:
         param_df.to_csv(out_dir + '/' + str(row_index) + params_csv_filepath, index=False)
 
-    # Calculate the mass balance model with the new mass balance parameters
     mb = mb_model_method(
         gdir,
         mb_model_class=MonthlyTIModel,
@@ -134,36 +168,29 @@ def run_with_runoff_for_sa(gdir, *,
         prcp_fac=float(prcp_fac),
         temp_bias=float(temp_bias),
         check_calib_params=False,
-        ) 
+        )
 
-    # Create unique file identifier based on parameters, where the model output is saved
     file_id = f'_hydro_mf{melt_f:.2f}_pf{prcp_fac:.2f}_tb{temp_bias:.2f}'
 
-    cfg.PARAMS['glen_a'] = glen_a_param  # Set the Glen A parameter for this run
-
-    # Uses run with hydro to calculate hydrological output, so we can calculate the runoff
     run_with_hydro(
         gdir,
         run_task=run_task,
-        ys=ys, # The simulation start year
-        min_ys=min_ys, # For the run from climate data, to ensure we have data from 1979
+        ys=ys,
+        min_ys=min_ys,
         init_model_yr=init_model_yr,
         glen_a_fac=float(glen_a_param),
         ref_area_yr=ref_area_yr,
-        mb_model=mb, # The modified MB model
+        mb_model=mb,
         store_monthly_hydro=True,
         output_filesuffix=file_id,
-        settings_filesuffix= settings_filesuffix
+        settings_filesuffix=settings_filesuffix
     )
 
     with xr.open_dataset(gdir.get_filepath('model_diagnostics', filesuffix=file_id)) as ds:
-        # The last step of hydrological output is NaN (we can't compute it for this year)
         ds = ds.isel(time=slice(0, -1)).load()
 
-    # These summed variabels give the total runoff from the glacier
-    runoff_vars = ['melt_off_glacier', 'melt_on_glacier','liq_prcp_off_glacier', 'liq_prcp_on_glacier']
-    
-    # TODO: Update the years that we are looking at here, we do not have to cut this down. We can do this later if we need.
+    runoff_vars = ['melt_off_glacier', 'melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier']
+
     y1 = years[0] + spinup_period
     y2 = years[-1]
 
@@ -173,34 +200,29 @@ def run_with_runoff_for_sa(gdir, *,
     df_area = ds['area_m2'].loc[y1:y2].values * 1e-6
     df_volume = ds['volume_m3'].loc[y1:y2].values
 
-    # Mass = Volume*Density => dM = dV*Density 
     dM = np.full_like(df_volume, np.nan)
-    dM[1:] = (df_volume[1:] - df_volume[:-1]) * cfg.PARAMS['ice_density'] # Annual change in mass
+    dM[1:] = (df_volume[1:] - df_volume[:-1]) * cfg.PARAMS['ice_density']
 
-    # Extract the relevant runoff variables
     df_annual = ds[runoff_vars].to_dataframe()
-
-    # Convert runoff from kg → Mt-equivalent and sum components
-    df_runoff = df_annual.sum(axis = 1) * 1e-9
+    df_runoff = df_annual.sum(axis=1) * 1e-9
     runoff = df_runoff.loc[y1:y2].values
 
-    dM = dM * 1e-9 # Convert to Mt-equivalent
+    dM = dM * 1e-9
 
-    # Write the output to a csv file
     df = pd.DataFrame({
-            'years': list(range(y1,y2)),
+            'years': list(range(y1, y2)),
             'runoff_Mt': runoff,
             'mass_balance': dM,
             'area_km2': df_area,
             'volume_km3': df_volume})
-    
+
     if save_output:
         df.to_csv(out_dir + '/' + str(row_index) + csv_filepath, index=False)
 
     if progress_callback is not None:
-        progress_callback(row_index+1)
+        progress_callback(row_index + 1)
 
-    return np.array(runoff) 
+    return np.array(runoff)
 
 #######################################################################
 # Function for Reducing Bounds - Check using Linear Regression Method
@@ -399,12 +421,16 @@ def runoff_execution(
         # split mass-balance params from the Glen A param
         mb_params_row = sample_row[:3]
         glen_a_row = sample_row[3]
+        phase_shift_row = sample_row[4]
+        temp_melt_row = sample_row[5]
 
         # build kwargs
         kw = dict(common)
         kw.update(
             mb_params=mb_params_row,
             glen_a_param=glen_a_row,
+            phase_shift=phase_shift_row,
+            temp_melt=temp_melt_row,
             row_index=i,
             settings_filesuffix=f"_exp{i}",
             progress_callback=progress_cb,

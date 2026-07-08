@@ -39,9 +39,9 @@ def get_args():
     parser.add_argument("--params_csv_path", type=str, required=True,
                         help="Parameters CSV path")
 
-    parser.add_argument("--x_max", type=float, nargs=4, required=True)
+    parser.add_argument("--x_max", type=float, nargs=6, required=True)
     
-    parser.add_argument("--x_min", type=float, nargs=4, required=True)
+    parser.add_argument("--x_min", type=float, nargs=6, required=True)
 
     parser.add_argument("--area_uncertainty", type=float, nargs='+', required=True)
 
@@ -98,6 +98,17 @@ def main():
 
     plot_parameter_bounding(args, params_valid, params_samples, area_dict, area_uncertainty, mass_balance_dict, hugonnet_dmdt, hugonnet_err_dmdt, rgi_area_km2, rgi_date, years_dict, rgi_id)
 
+    # param_names = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a_fac', 'phase_shift', 'temp_melt']
+    # prior_bounds = [(1.5, 17), (0.1, 10), (-15, 15), (1.0, 1.5), (-3, 3), (-1.5, 0.5)]
+
+    # fig, ax = plot_prior_posterior_ranges(
+    #     csv_path=cfg.PATHS['working_dir'] + '/' + 'reduced_bounds.csv',
+    #     param_names=param_names,
+    #     prior_bounds=prior_bounds,
+    #     glacier_id=args.rgi_ids[0],
+    #     outpath=os.path.join(cfg.PATHS['working_dir'], "prior_posterior_ranges.png")
+    # )
+
 ##############################################################
 # Read CSVs
 ##############################################################
@@ -123,7 +134,7 @@ def read_csvs(args, N):
         try:
             
             mb_param_df = pd.read_csv(param_path)
-            row = mb_param_df[["melt_f", "prcp_fac", "temp_bias", "glen_a"]].values[0]
+            row = mb_param_df[["melt_f", "prcp_fac", "temp_bias", "glen_a_fac", "phase_shift", "temp_melt"]].values[0]
             params_all.append(row)
         except FileNotFoundError:
             print(f"No parameter file for index {i}")
@@ -235,17 +246,15 @@ def plot_area_timeseries(area_samples, years_samples, rgi_id, N, gdir, area_unc_
     plt.xlim(years_samples[0][0], years_samples[0][-1])
 
     plt.tight_layout()
-    outpath = os.path.join(cfg.PATHS['working_dir'], "area.png")
+    outpath = os.path.join(cfg.PATHS['working_dir'], "area_post.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
     plt.figure(figsize=(13,4))
 
 def plot_volume_timeseries(volume_samples, years_samples, rgi_id, N):
     plt.figure(figsize=(13,4))
     
-    print(len(years_samples), len(volume_samples))
     for i in range(len(years_samples)):
         plt.subplot(1,1,1)
-        print("vol", len(volume_samples[i]))
         plt.plot(years_samples[i], volume_samples[i], label='sim', color='k', linewidth=0.5, alpha=0.1)
     plt.title('Volume time series for each parameter sample, N = %d for RGI-ID = %s' % (N, rgi_id))
     plt.ylabel('Glacier volume (km$^3$)')
@@ -267,7 +276,7 @@ def plot_runoff_timeseries(runoff_samples, years_samples, rgi_id, N):
     plt.ylabel('Runoff (Mt/yr)')
     plt.xlabel('Year')
     plt.tight_layout()
-    outpath = os.path.join(cfg.PATHS['working_dir'], "runoff.png")
+    outpath = os.path.join(cfg.PATHS['working_dir'], "runoff_post.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
 ##############################################################
@@ -282,39 +291,57 @@ def plot_input_hists(params_samples, args):
     precip_low, precip_high = x_min[1], x_max[1]
     tbias_low, tbias_high = x_min[2], x_max[2]
     glen_a_low, glen_a_high = x_min[3], x_max[3]
+    phase_shift_low, phase_shift_high = x_min[4], x_max[4]
+    temp_melt_low, temp_melt_high = x_min[5], x_max[5]
 
     nbins = 50
     bins_melt   = np.linspace(melt_low,   melt_high,   nbins+1)
     bins_precip = np.linspace(precip_low, precip_high, nbins+1)
     bins_tbias  = np.linspace(tbias_low,  tbias_high,  nbins+1)
     bins_glen_a = np.linspace(glen_a_low, glen_a_high, nbins+1)
+    bins_phase_shift = np.linspace(phase_shift_low, phase_shift_high, nbins+1)
+    bins_temp_melt = np.linspace(temp_melt_low, temp_melt_high, nbins+1)
     
     plt.figure(figsize=(13, 4))
-    plt.subplot(1,4,1)
+    plt.subplot(1,6,1)
     plt.title('Distribution of melt factor', loc='left')
     params_samples = np.array(params_samples)
     plt.hist(params_samples[:,0], bins=bins_melt, range=(melt_low, melt_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Melt Factor')
-    plt.subplot(1,4,2)
+    plt.subplot(1,6,2)
     plt.title('Distribution of precipitation factor', loc='left')
     plt.hist(params_samples[:,1], bins=bins_precip, range=(precip_low, precip_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Precipitation Factor')
-    plt.subplot(1,4,3)
+    plt.subplot(1,6,3)
     plt.title('Distribution of temperature bias', loc='left')
     plt.hist(params_samples[:,2], bins=bins_tbias, range=(tbias_low, tbias_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Temperature Bias')
-    plt.subplot(1,4,4)
+    plt.subplot(1,6,4)
     plt.title('Distribution of Glen A multiplier', loc='left')
     plt.hist(params_samples[:,3], bins=bins_glen_a, range=(glen_a_low, glen_a_high),
              color='grey', edgecolor='white')
     plt.ylabel('Frequency of samples'); plt.xlabel('Glen A Multiplier')
     plt.tight_layout()
+    plt.subplot(1,6,5)
+    plt.title('Distribution of Phase Shift', loc='left')
+    plt.hist(params_samples[:,4], bins=bins_phase_shift, range=(phase_shift_low, phase_shift_high),
+             color='grey', edgecolor='white')
+    plt.ylabel('Frequency of samples'); plt.xlabel('Phase Shift')
+    plt.tight_layout()
+    plt.subplot(1,6,6)
+    plt.title('Distribution of Temp Melt', loc='left')
+    plt.hist(params_samples[:,5], bins=bins_temp_melt, range=(temp_melt_low, temp_melt_high),
+             color='grey', edgecolor='white')
+    plt.ylabel('Frequency of samples'); plt.xlabel('Temp Melt')
+    plt.tight_layout()
+
     outpath = os.path.join(cfg.PATHS['working_dir'], "parameter_distribution.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
     plt.tight_layout()
+    
     outpath = os.path.join(cfg.PATHS['working_dir'], "parameter_distribution.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
 
@@ -404,7 +431,7 @@ def runoff_pawn_plot_all(params_valid, YY_list, metric='Mean Runoff', n=5, Nboot
     else:
         raise ValueError("metric must be 'Mean Runoff' or 'Std of Runoff'")
     Y = YY_list[:, i]
-    X_labels = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a_fac']
+    X_labels = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a_fac', 'phase_shift', 'temp_melt']
     params_samples = np.array(params_valid)
 
     KS_median, KS_mean, KS_max = PAWN.pawn_indices(params_valid, Y, n, Nboot=Nboot)
@@ -539,28 +566,40 @@ def plot_parameter_bounding(args, params_valid,params_samples, area_samples, are
         print("The new upper bounds for glacier are: %s" % (new_upper_bounds))
         print("The new lower bounds for glacier are: %s" % (new_lower_bounds))
 
-    X_labels = ['melt_f', 'prcp_fac', 'temp_bias']
+    from itertools import combinations
+
+    X_labels = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a_fac', 'phase_shift', 'temp_melt']
     M = len(X_labels)
+
+    # all unique pairs (i, j) with i < j
+    pairs = list(combinations(range(M), 2))
+    n_plots = len(pairs)
+
+    n_cols = 3
+    n_rows = int(np.ceil(n_plots / n_cols))
+
     fig, axs = plt.subplots(
-        1, M,
-        figsize=(15, 4),
+        n_rows, n_cols,
+        figsize=(5 * n_cols, 4 * n_rows),
         squeeze=False
     )
 
     params_samples = np.asarray(params_samples)
     good_X_list = np.asarray(good_X_list)
     good_X_list = np.squeeze(good_X_list)
-   
+
     # Ensure it's always 2D: (n_samples, n_params)
     if good_X_list.ndim == 1:
         good_X_list = good_X_list.reshape(1, -1)
 
-    # loop over parameters and plot scatter
-    for i in range(M):
-        ax = axs[0, i]
+    # loop over every parameter pair
+    for k, (i, j) in enumerate(pairs):
+        row, col = divmod(k, n_cols)
+        ax = axs[row, col]
+
         ax.scatter(
             params_samples[:, i],
-            params_samples[:, (i+1) % M],
+            params_samples[:, j],
             s=20,
             edgecolors='none',
             color='grey',
@@ -570,13 +609,20 @@ def plot_parameter_bounding(args, params_valid,params_samples, area_samples, are
         if good_X_list.size > 0:
             ax.scatter(
                 good_X_list[:, i],
-                good_X_list[:, (i+1) % M],
+                good_X_list[:, j],
                 s=20,
                 edgecolors='none',
                 color='red'
             )
-            ax.set_xlabel(X_labels[i])
-            ax.set_ylabel(X_labels[(i+1) % M])
+
+        ax.set_xlabel(X_labels[i])
+        ax.set_ylabel(X_labels[j])
+
+    # hide any unused subplot axes (blank spaces)
+    for k in range(n_plots, n_rows * n_cols):
+        row, col = divmod(k, n_cols)
+        axs[row, col].axis('off')
+
     plt.tight_layout()
     outpath = os.path.join(cfg.PATHS['working_dir'], "reduced_bounds.png")
     plt.savefig(outpath, dpi=200, bbox_inches='tight')
@@ -586,7 +632,7 @@ def plot_parameter_bounding(args, params_valid,params_samples, area_samples, are
 
         # Save the new bounds to a CSV file
         with open(csv_outpath, 'w') as f:
-            f.write("xmin1,xmin2,xmin3,xmax1,xmax2,xmax3\n")
+            f.write("xmin1,xmin2,xmin3,xmin4,xmin5,xmin6,xmax1,xmax2,xmax3,xmax4,xmax5,xmax6\n")
 
             if new_lower_bounds_list is None or new_upper_bounds_list is None:
                 xmin = args.x_min
@@ -595,7 +641,7 @@ def plot_parameter_bounding(args, params_valid,params_samples, area_samples, are
                 xmin = new_lower_bounds_list[0]
                 xmax = new_upper_bounds_list[0]
 
-            f.write(f"{xmin[0]},{xmin[1]},{xmin[2]},{xmax[0]},{xmax[1]},{xmax[2]}\n")
+            f.write(f"{xmin[0]},{xmin[1]},{xmin[2]},{xmin[3]},{xmin[4]},{xmin[5]},{xmax[0]},{xmax[1]},{xmax[2]},{xmax[3]},{xmax[4]},{xmax[5]}\n")
 
     return good_X_list
 
@@ -645,6 +691,115 @@ def plot_parameter_bounding(args, params_valid,params_samples, area_samples, are
 #             bbox_inches='tight'
 #         )
 #     plt.close(fig3d)
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+
+
+def plot_prior_posterior_ranges(
+    csv_path,
+    param_names,
+    prior_bounds,
+    glacier_id=None,
+    bar_height=6,
+    figsize=(7, 4),
+    title="Prior vs Posterior Parameter Range Comparison",
+    outpath=None,
+):
+    """
+    Reads a single glacier's posterior (reduced) parameter bounds from a CSV
+    in the format:
+        xmin1, xmin2, ..., xminN, xmax1, xmax2, ..., xmaxN
+    (one row), and plots horizontal prior vs posterior range bars for that
+    glacier.
+
+    Parameters
+    ----------
+    csv_path : str
+        Path to the glacier's reduced-bounds CSV.
+    param_names : list of str
+        Parameter labels, in the SAME ORDER as the xmin/xmax column indices
+        (e.g. param_names[0] corresponds to xmin1/xmax1), and in the order
+        they should appear top-to-bottom on the y-axis.
+    prior_bounds : list of (low, high) tuples
+        The prior (original sampling) range for each parameter, in the same
+        order as param_names.
+    glacier_id : str, optional
+        Label used as the plot title. Defaults to the CSV's filename
+        (without extension) if not given.
+    bar_height : float
+        Line width (in points) used to draw each range as a thick bar.
+    figsize : tuple
+        Figure size.
+    title : str
+        Overall figure title (shown above the glacier_id subtitle).
+    outpath : str, optional
+        If given, saves the figure to this path.
+
+    Returns
+    -------
+    fig, ax
+    """
+
+    n_params = len(param_names)
+    xmin_cols = [f'xmin{i+1}' for i in range(n_params)]
+    xmax_cols = [f'xmax{i+1}' for i in range(n_params)]
+
+    df = pd.read_csv(csv_path)
+    missing = [c for c in xmin_cols + xmax_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"{csv_path} is missing expected columns: {missing}")
+
+    row = df.iloc[0]  # single-row CSV
+    posterior_ranges = [(row[xmin_cols[j]], row[xmax_cols[j]]) for j in range(n_params)]
+
+    if glacier_id is None:
+        import os
+        glacier_id = os.path.splitext(os.path.basename(csv_path))[0]
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # y-positions: first param_name at the TOP
+    y_pos = np.arange(n_params)[::-1]
+
+    for y, (p_low, p_high), (post_low, post_high) in zip(
+        y_pos, prior_bounds, posterior_ranges
+    ):
+        # Prior range (grey, drawn first so posterior sits on top)
+        ax.hlines(y, p_low, p_high, color='lightgrey',
+                  linewidth=bar_height, zorder=1)
+        # Posterior range (blue)
+        ax.hlines(y, post_low, post_high, color='blue',
+                  linewidth=bar_height, zorder=2)
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(param_names)
+    ax.set_xlabel("Parameter Range")
+    ax.set_ylabel("Parameters")
+    ax.set_title(glacier_id)
+    ax.grid(axis='x', linestyle='--', alpha=0.4)
+    ax.set_ylim(-1, n_params)
+
+    legend_handles = [
+        mlines.Line2D([], [], color='lightgrey', linewidth=bar_height, label='Prior'),
+        mlines.Line2D([], [], color='blue', linewidth=bar_height, label='Posterior'),
+    ]
+    ax.legend(handles=legend_handles, loc='upper right')
+
+    fig.suptitle(title, fontsize=13)
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+
+    if outpath is not None:
+        plt.savefig(outpath, dpi=200, bbox_inches='tight')
+
+    return fig, ax
 
 if __name__ == "__main__":
         main()

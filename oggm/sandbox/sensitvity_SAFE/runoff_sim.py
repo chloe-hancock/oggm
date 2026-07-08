@@ -35,9 +35,9 @@ def get_args():
     parser.add_argument("--params_csv_path", type=str, required=True,
                         help="Parameters CSV paths")
     
-    parser.add_argument("--x_max", type=float, nargs=4, required=True)
+    parser.add_argument("--x_max", type=float, nargs=6, required=True)
     
-    parser.add_argument("--x_min", type=float, nargs=4, required=True)
+    parser.add_argument("--x_min", type=float, nargs=6, required=True)
     
     parser.add_argument("--out_dir", type=str, required=True,
                         help="Output directory for results (optional)")
@@ -48,7 +48,7 @@ def main():
 
         args = get_args()
 
-        cfg.initialize(logging_level='CRITICAL') # To suppress OGGM logging output during the runs
+        cfg.initialize() # To suppress OGGM logging output during the runs
         cfg.PATHS['working_dir'] = args.work_dir
         cfg.PARAMS['store_model_geometry'] = True
         cfg.PARAMS['min_ice_thick_for_length'] = 1
@@ -71,7 +71,7 @@ def main():
                 # And match the Hugonnet
         geo_df = utils.get_geodetic_mb_dataframe()
 
-        X_labels = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a']
+        X_labels = ['melt_f', 'prcp_fac', 'temp_bias', 'glen_a', 'phase_shift', 'temp_melt']
         M = len(X_labels)
 
         distr_fun = st.uniform # Uniform distribution for all parameters

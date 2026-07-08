@@ -10,23 +10,28 @@
 # DEFINE PARAMETERS 
 # RGI_IDS=(RGI60-06.00001 RGI60-13.00001 RGI60-14.00001)
 # RGI_IDS=(RGI60-06.00377 RGI60-11.00897 RGI60-13.53223)
-RGI_IDS=(RGI60-06.00377)
 
-N=1000
+N=5000
 OUTPUT_CSV_PATH='_output.csv'
 PARAMS_CSV_PATH='_params.csv'
 
+# RGI_IDS=(RGI60-06.00377 RGI60-11.00897 RGI60-13.53223)
+RGI_IDS=(RGI60-06.00377 RGI60-13.53223)
 # Minimum values for each parameter
-xmin1=1.5
-xmin2=0.1
-xmin3=-15.0
-xmin4=0.5 # glen_a multiplier
+xmin1=1.5 # melt_f
+xmin2=0.1 # prcp_fac
+xmin3=-15.0 # temp_bias
+xmin4=1.0 # glen_a multiplier
+xmin5=-3.0 # phase shift for liquid/solid precipitation 
+xmin6=-1.5 # temp_melt
 
 # Maximum values for each parameter
-xmax1=17.0
-xmax2=10.0
-xmax3=15.0
-xmax4=5.0 # glen_a multiplier
+xmax1=17.0 # melt_f
+xmax2=10.0 # prcp_fac
+xmax3=15.0 # temp_bias
+xmax4=1.5 # glen_a multiplier
+xmax5=3.0 # phase shift for liquid/solid precipitation 
+xmax6=0.5 # temp_melt
 
 
 area_uncertainty_south_asia_west=7.7
@@ -45,6 +50,7 @@ area_uncertainty_central_asia=8.4
 
 AREA_UNCERTAINTY_LIST=(
     "$area_uncertainty_iceland"
+    "$area_uncertainty_central_asia"
 )
 
 # PATHS 
@@ -88,8 +94,8 @@ for i in "${!RGI_IDS[@]}"; do
         --N $N \
         --output_csv_path $OUTPUT_CSV_PATH \
         --params_csv_path $PARAMS_CSV_PATH \
-        --x_max $xmax1 $xmax2 $xmax3 $xmax4 \
-        --x_min $xmin1 $xmin2 $xmin3 $xmin4 \
+        --x_max $xmax1 $xmax2 $xmax3 $xmax4 $xmax5 $xmax6 \
+        --x_min $xmin1 $xmin2 $xmin3 $xmin4 $xmin5 $xmin6 \
         --area_uncertainty $area_unc
 
     echo "Finished processing $rid at $(date)"
